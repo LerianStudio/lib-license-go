@@ -1,4 +1,4 @@
-package sdk
+package middleware
 
 import (
 	"bytes"
@@ -12,11 +12,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LerianStudio/lib-commons/commons"
 	"github.com/LerianStudio/lib-commons/commons/log"
 	"github.com/LerianStudio/lib-commons/commons/zap"
 	"github.com/dgraph-io/ristretto"
 	"github.com/google/uuid"
 )
+
+type Config struct {
+	ApplicationName string
+	LicenseKey      string
+	OrganizationID  string
+	APIGatewayURL   string
+
+	fingerprint string
+}
 
 // ValidationResult contains the data returned by license validation.
 type ValidationResult struct {
@@ -33,8 +43,8 @@ type backgroundRefreshConfig struct {
 	lastAttemptedRefresh time.Time
 }
 
-// Validator handles license validation with caching and background refresh.
-type Validator struct {
+// LicenseClient handles license validation with caching and background refresh.
+type LicenseClient struct {
 	cli          *http.Client
 	cache        *ristretto.Cache
 	bgConfig     *backgroundRefreshConfig
@@ -46,7 +56,21 @@ type Validator struct {
 // NewLicenseClient creates a new license validator with the given config and logger.
 // If logger is nil, defaults to a standard zap logger.
 // The validator includes fingerprint generation, caching, and background validation.
-func NewLicenseClient(cfg Config, logger *log.Logger) *Validator {
+func NewLicenseClient(cfg Config, logger *log.Logger) *LicenseClient {
+	var l log.Logger
+
+	if logger != nil {
+		l = *logger
+	} else {
+		l = zap.InitializeLogger()
+	}
+
+	if err := validateEnvVariables(&cfg, l); err != nil {
+		l.Error("Invalid environment variables", "error", err.Error())
+
+		return nil
+	}
+
 	cache, _ := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M)
 		MaxCost:     1 << 20, // maximum cost of cache (1MB)
@@ -67,15 +91,7 @@ func NewLicenseClient(cfg Config, logger *log.Logger) *Validator {
 
 	cfg.fingerprint = fp
 
-	var l log.Logger
-
-	if logger != nil {
-		l = *logger
-	} else {
-		l = zap.InitializeLogger()
-	}
-
-	return &Validator{
+	return &LicenseClient{
 		cfg:   cfg,
 		cache: cache,
 		cli: &http.Client{
@@ -89,7 +105,7 @@ func NewLicenseClient(cfg Config, logger *log.Logger) *Validator {
 }
 
 // Validate checks if the license is valid. Results are cached.
-func (v *Validator) Validate(ctx context.Context) (ValidationResult, error) {
+func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) {
 	// First check cache
 	if val, found := v.cache.Get("license"); found {
 		if r, ok := val.(ValidationResult); ok {
@@ -122,7 +138,7 @@ func (v *Validator) Validate(ctx context.Context) (ValidationResult, error) {
 }
 
 // callBackend makes an API call to validate the license.
-func (v *Validator) callBackend(ctx context.Context) (ValidationResult, error) {
+func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, error) {
 	if v.cfg.APIGatewayURL == "" {
 		return ValidationResult{}, errors.New("LERIAN_API_GATEWAY_URL not set")
 	}
@@ -164,7 +180,7 @@ func (v *Validator) callBackend(ctx context.Context) (ValidationResult, error) {
 }
 
 // StartBackgroundRefresh runs a ticker to refresh license weekly.
-func (v *Validator) StartBackgroundRefresh(ctx context.Context) {
+func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 	v.bgConfig.mu.Lock()
 	if v.bgConfig.started {
 		v.bgConfig.mu.Unlock()
@@ -199,7 +215,7 @@ func (v *Validator) StartBackgroundRefresh(ctx context.Context) {
 }
 
 // attemptValidationWithRetry tries to validate the license with exponential backoff
-func (v *Validator) attemptValidationWithRetry(ctx context.Context) {
+func (v *LicenseClient) attemptValidationWithRetry(ctx context.Context) {
 	v.bgConfig.mu.Lock()
 	v.bgConfig.lastAttemptedRefresh = time.Now()
 	v.bgConfig.mu.Unlock()
@@ -264,4 +280,40 @@ func isConnectionError(err error) bool {
 	}
 
 	return false
+}
+
+func validateEnvVariables(cfg *Config, l log.Logger) error {
+	if commons.IsNilOrEmpty(&cfg.ApplicationName) {
+		err := "Missing application name environment variable"
+
+		l.Error(err)
+
+		return errors.New(err)
+	}
+
+	if commons.IsNilOrEmpty(&cfg.LicenseKey) {
+		err := "Missing license key environment variable"
+
+		l.Error(err)
+
+		return errors.New(err)
+	}
+
+	if commons.IsNilOrEmpty(&cfg.OrganizationID) {
+		err := "Missing organization ID environment variable"
+
+		l.Error(err)
+
+		return errors.New(err)
+	}
+
+	if commons.IsNilOrEmpty(&cfg.APIGatewayURL) {
+		err := "Missing api gateway url environment variable"
+
+		l.Error(err)
+
+		return errors.New(err)
+	}
+
+	return nil
 }

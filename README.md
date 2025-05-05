@@ -27,6 +27,8 @@ LERIAN_API_GATEWAY_URL=https://your-api-gateway-url
 In your `config.go` file, configure the environment variables for the Auth Service:
 
 ```go
+import libLicense "github.com/LerianStudio/lib-license/middleware"
+
 type Config struct {
     ApplicationName        string   `env:"APPLICATION_NAME"`
     LicenseKey             string   `env:"LICENSE_KEY"`
@@ -34,21 +36,35 @@ type Config struct {
     LerianAPIGatewayURL    string   `env:"LERIAN_API_GATEWAY_URL"`
 }
 
-cfg := &Config{}
+func InitServers() *Service {
+	cfg := &Config{}
 
-logger := zap.InitializeLogger()
-```
+	logger := zap.InitializeLogger()
 
-```go
-import libLicense "github.com/LerianStudio/lib-license"
+	licenseClient := libLicense.NewLicenseClient(
+        &libLicense.Config{
+            ApplicationName:        cfg.ApplicationName,
+            LicenseKey:             cfg.LicenseKey,
+            MidazOrganizationID:    cfg.MidazOrganizationID,
+            LerianAPIGatewayURL:    cfg.LerianAPIGatewayURL,
+        },
+        &logger,
+    )
 
-licenseClient := libLicense.NewLicenseClient(cfg.LicenseKey, cfg.MidazOrganizationID, cfg.LerianAPIGatewayURL, &logger)
+    httpApp := httpIn.NewRoutes(logger, [...], licenseClient)
+
+    serverAPI := NewServer(cfg, httpApp, logger, [...])
+
+	return &Service{
+		serverAPI,
+		logger,
+	}
 ```
 
 ### 3. Use the middleware in your Fiber application:
 
 ```go
-func NewRoutes(license *libLicense.Validator, [...]) *fiber.App {
+func NewRoutes(license *libLicense.LicenseClient, [...]) *fiber.App {
     f := fiber.New(fiber.Config{
         DisableStartupMessage: true,
     })

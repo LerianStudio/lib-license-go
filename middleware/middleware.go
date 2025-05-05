@@ -1,4 +1,4 @@
-package sdk
+package middleware
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 // ShutdownBackgroundRefresh stops the background refresh routine.
-func (v *Validator) ShutdownBackgroundRefresh() {
+func (v *LicenseClient) ShutdownBackgroundRefresh() {
 	v.bgConfig.mu.Lock()
 	defer v.bgConfig.mu.Unlock()
 
@@ -35,7 +35,7 @@ var (
 	bgRefreshMutex   sync.Mutex
 )
 
-func (v *Validator) startBackgroundRefreshOnce() {
+func (v *LicenseClient) startBackgroundRefreshOnce() {
 	bgRefreshMutex.Lock()
 	defer bgRefreshMutex.Unlock()
 
@@ -48,7 +48,7 @@ func (v *Validator) startBackgroundRefreshOnce() {
 // Middleware returns a Fiber middleware that validates licenses.
 // This middleware will automatically start background license validation
 // exactly once across all instances.
-func (v *Validator) Middleware() fiber.Handler {
+func (v *LicenseClient) Middleware() fiber.Handler {
 	v.startBackgroundRefreshOnce()
 
 	return func(c *fiber.Ctx) error {
