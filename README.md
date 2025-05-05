@@ -40,15 +40,15 @@ logger := zap.InitializeLogger()
 ```
 
 ```go
-import liblicense "github.com/LerianStudio/lib-license"
+import libLicense "github.com/LerianStudio/lib-license"
 
-licenseClient := liblicense.NewLicenseClient(cfg.LicenseKey, cfg.MidazOrganizationID, cfg.LerianAPIGatewayURL, &logger)
+licenseClient := libLicense.NewLicenseClient(cfg.LicenseKey, cfg.MidazOrganizationID, cfg.LerianAPIGatewayURL, &logger)
 ```
 
 ### 3. Use the middleware in your Fiber application:
 
 ```go
-func NewRoutes(license *liblicense.Validator, [...]) *fiber.App {
+func NewRoutes(license *libLicense.Validator, [...]) *fiber.App {
     f := fiber.New(fiber.Config{
         DisableStartupMessage: true,
     })
@@ -62,17 +62,8 @@ func NewRoutes(license *liblicense.Validator, [...]) *fiber.App {
         license.ShutdownBackgroundRefresh()
     })
 }
+```
 
-## Env Vars
+## 📧 Contact
 
-| Var | Description |
-| --- | ----------- |
-| `APPLICATION_NAME` | Your plugin name (Default env for every plugin) |
-| `LICENSE_KEY` | Your Keygen license key |
-| `MIDAZ_ORGANIZATION_ID` | Your Midaz Org ID |
-| `LERIAN_API_GATEWAY_URL` | Gateway base URL (without trailing slash) |
-
-## TODO
-
-* Unit tests (gomock)
-* Metrics / tracing hooks
+For questions or support, contact us at: [contato@lerian.studio](mailto:contato@lerian.studio).
