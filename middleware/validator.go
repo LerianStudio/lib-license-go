@@ -56,7 +56,7 @@ type LicenseClient struct {
 // NewLicenseClient creates a new license validator with the given config and logger.
 // If logger is nil, defaults to a standard zap logger.
 // The validator includes fingerprint generation, caching, and background validation.
-func NewLicenseClient(cfg Config, logger *log.Logger) *LicenseClient {
+func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 	var l log.Logger
 
 	if logger != nil {
@@ -65,7 +65,7 @@ func NewLicenseClient(cfg Config, logger *log.Logger) *LicenseClient {
 		l = zap.InitializeLogger()
 	}
 
-	if err := validateEnvVariables(&cfg, l); err != nil {
+	if err := validateEnvVariables(cfg, l); err != nil {
 		l.Error("Invalid environment variables", "error", err.Error())
 
 		return nil
@@ -92,7 +92,7 @@ func NewLicenseClient(cfg Config, logger *log.Logger) *LicenseClient {
 	cfg.fingerprint = fp
 
 	return &LicenseClient{
-		cfg:   cfg,
+		cfg:   *cfg,
 		cache: cache,
 		cli: &http.Client{
 			Timeout: 5 * time.Second,
@@ -283,8 +283,12 @@ func isConnectionError(err error) bool {
 }
 
 func validateEnvVariables(cfg *Config, l log.Logger) error {
+	if cfg == nil {
+		return errors.New("license client config is nil")
+	}
+
 	if commons.IsNilOrEmpty(&cfg.ApplicationName) {
-		err := "Missing application name environment variable"
+		err := "missing application name environment variable"
 
 		l.Error(err)
 
@@ -292,7 +296,7 @@ func validateEnvVariables(cfg *Config, l log.Logger) error {
 	}
 
 	if commons.IsNilOrEmpty(&cfg.LicenseKey) {
-		err := "Missing license key environment variable"
+		err := "missing license key environment variable"
 
 		l.Error(err)
 
@@ -300,7 +304,7 @@ func validateEnvVariables(cfg *Config, l log.Logger) error {
 	}
 
 	if commons.IsNilOrEmpty(&cfg.OrganizationID) {
-		err := "Missing organization ID environment variable"
+		err := "missing organization ID environment variable"
 
 		l.Error(err)
 
@@ -308,7 +312,7 @@ func validateEnvVariables(cfg *Config, l log.Logger) error {
 	}
 
 	if commons.IsNilOrEmpty(&cfg.APIGatewayURL) {
-		err := "Missing api gateway url environment variable"
+		err := "missing api gateway url environment variable"
 
 		l.Error(err)
 
