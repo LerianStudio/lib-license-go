@@ -38,22 +38,22 @@ type Config struct {
 
 func InitServers() *Service {
 	cfg := &Config{}
-
+	
 	logger := zap.InitializeLogger()
-
+	
 	licenseClient := libLicense.NewLicenseClient(
-        &libLicense.Config{
-            ApplicationName:        cfg.ApplicationName,
-            LicenseKey:             cfg.LicenseKey,
-            MidazOrganizationID:    cfg.MidazOrganizationID,
-            LerianAPIGatewayURL:    cfg.LerianAPIGatewayURL,
-        },
-        &logger,
-    )
+		&libLicense.Config{
+		    ApplicationName:        cfg.ApplicationName,
+		    LicenseKey:             cfg.LicenseKey,
+		    MidazOrganizationID:    cfg.MidazOrganizationID,
+		    LerianAPIGatewayURL:    cfg.LerianAPIGatewayURL,
+		},
+		&logger,
+	)
 
-    httpApp := httpIn.NewRoutes(logger, [...], licenseClient)
+	httpApp := httpIn.NewRoutes(logger, [...], licenseClient)
 
-    serverAPI := NewServer(cfg, httpApp, logger, [...])
+	serverAPI := NewServer(cfg, httpApp, logger, [...])
 
 	return &Service{
 		serverAPI,
