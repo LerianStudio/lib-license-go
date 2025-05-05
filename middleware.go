@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -71,8 +72,8 @@ func (v *Validator) Middleware() fiber.Handler {
 		}
 
 		// Propagate expiration information to response headers
-		c.Set("X-License-Expiry-Days", string(res.ExpiryDaysLeft))
-		
+		c.Set("X-License-Expiry-Days", fmt.Sprintf("%d", res.ExpiryDaysLeft))
+
 		// Continue to the next handler
 		return c.Next()
 	}

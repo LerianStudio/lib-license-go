@@ -61,7 +61,7 @@ func NewLicenseClient(cfg Config, logger *log.Logger) *Validator {
 		fp = cfg.fingerprint
 	}
 
-	if org := cfg.OrgID; org != "" {
+	if org := cfg.OrganizationID; org != "" {
 		fp = org + "_" + fp
 	}
 

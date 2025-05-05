@@ -9,38 +9,67 @@ A lightweight Go SDK + Fiber middleware to validate plugin licenses against the 
 * Fiber middleware → drop-in guard for any route
 * Fetches license validity & enabled plugins from Gateway (AWS API Gateway)
 
-## Quickstart
+## 🚀 How to Use
+
+### 1. Set the needed environment variables:
+
+In your environment configuration or `.env` file, set the following environment variables:
+
+```dotenv
+APPLICATION_NAME=your-application-name
+LICENSE_KEY=your-plugin-license-key
+MIDAZ_ORGANIZATION_ID=your-organization-id
+LERIAN_API_GATEWAY_URL=https://your-api-gateway-url
+```
+
+### 2. Create a new instance of the middleware:
+
+In your `config.go` file, configure the environment variables for the Auth Service:
 
 ```go
-import (
-    sdk "github.com/LerianStudio/plugin-license-sdk"
-    "github.com/gofiber/fiber/v2"
-)
-
-func main() {
-    lClient := sdk.NewLicenseClient(sdk.LoadFromEnv())
-
-    app := fiber.New()
-    app.Use(lClient.Middleware())
-
-    app.Get("/hello", func(c *fiber.Ctx) error {
-        return c.JSON(fiber.Map{"msg": "ok"})
-    })
-
-    app.Shutdown(func() {
-        lClient.ShutdownBackgroundRefresh()
-    })
-
-    app.Listen(":8080")
+type Config struct {
+    ApplicationName        string   `env:"APPLICATION_NAME"`
+    LicenseKey             string   `env:"LICENSE_KEY"`
+    MidazOrganizationID    string   `env:"MIDAZ_ORGANIZATION_ID"`
+    LerianAPIGatewayURL    string   `env:"LERIAN_API_GATEWAY_URL"`
 }
+
+cfg := &Config{}
+
+logger := zap.InitializeLogger()
 ```
+
+```go
+import liblicense "github.com/LerianStudio/lib-license"
+
+licenseClient := liblicense.NewLicenseClient(cfg.LicenseKey, cfg.MidazOrganizationID, cfg.LerianAPIGatewayURL, &logger)
+```
+
+### 3. Use the middleware in your Fiber application:
+
+```go
+func NewRoutes(license *liblicense.Validator, [...]) *fiber.App {
+    f := fiber.New(fiber.Config{
+        DisableStartupMessage: true,
+    })
+    
+    f.Use(license.Middleware())
+    
+    // Applications routes
+    f.Get("/v1/applications", applicationHandler.GetApplications)
+
+    f.Shutdown(func() {
+        license.ShutdownBackgroundRefresh()
+    })
+}
 
 ## Env Vars
 
 | Var | Description |
 | --- | ----------- |
+| `APPLICATION_NAME` | Your plugin name (Default env for every plugin) |
 | `LICENSE_KEY` | Your Keygen license key |
-| `ORG_ID` | Your Midaz Org ID (Part of fingerprint algorithm) |
+| `MIDAZ_ORGANIZATION_ID` | Your Midaz Org ID |
 | `LERIAN_API_GATEWAY_URL` | Gateway base URL (without trailing slash) |
 
 ## TODO
