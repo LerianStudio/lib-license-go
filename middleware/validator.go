@@ -142,7 +142,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, erro
 	if v.cfg.APIGatewayURL == "" {
 		return ValidationResult{}, errors.New("LERIAN_API_GATEWAY_URL not set")
 	}
-	url := fmt.Sprintf("%s/validate-token", v.cfg.APIGatewayURL)
+	url := fmt.Sprintf("%s/licenses/validate-token", v.cfg.APIGatewayURL)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
