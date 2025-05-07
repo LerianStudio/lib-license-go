@@ -27,7 +27,7 @@ LERIAN_API_GATEWAY_URL=https://your-api-gateway-url
 In your `config.go` file, configure the environment variables for the Auth Service:
 
 ```go
-import libLicense "github.com/LerianStudio/lib-license/middleware"
+import libLicense "github.com/LerianStudio/lib-license-go/middleware"
 
 type Config struct {
     ApplicationName        string   `env:"APPLICATION_NAME"`
