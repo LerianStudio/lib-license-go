@@ -16,7 +16,6 @@ import (
 	"github.com/LerianStudio/lib-commons/commons/log"
 	"github.com/LerianStudio/lib-commons/commons/zap"
 	"github.com/dgraph-io/ristretto"
-	"github.com/google/uuid"
 )
 
 type Config struct {
@@ -77,16 +76,12 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 		BufferItems: 64,      // number of keys per Get buffer
 	})
 
-	var fp string
+	fp := cfg.ApplicationName + "_"
 
-	if cfg.fingerprint == "" {
-		fp = uuid.NewString() + "_" + cfg.ApplicationName
+	if orgID := cfg.OrganizationID; orgID != "" {
+		fp = fp + commons.HashSHA256(cfg.LicenseKey + "_" + orgID)
 	} else {
-		fp = cfg.fingerprint
-	}
-
-	if org := cfg.OrganizationID; org != "" {
-		fp = org + "_" + fp
+		fp = fp + commons.HashSHA256(cfg.LicenseKey)
 	}
 
 	cfg.fingerprint = fp
