@@ -79,7 +79,7 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 	fp := cfg.ApplicationName + "_"
 
 	if orgID := cfg.OrganizationID; orgID != "" {
-		fp = fp + commons.HashSHA256(cfg.LicenseKey + "_" + orgID)
+		fp = fp + commons.HashSHA256(cfg.LicenseKey+"_"+orgID)
 	} else {
 		fp = fp + commons.HashSHA256(cfg.LicenseKey)
 	}
@@ -137,7 +137,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, erro
 	if v.cfg.APIGatewayURL == "" {
 		return ValidationResult{}, errors.New("LERIAN_API_GATEWAY_URL not set")
 	}
-	url := fmt.Sprintf("%s/licenses/validate-token", v.cfg.APIGatewayURL)
+	url := fmt.Sprintf("%s/licenses/validate", v.cfg.APIGatewayURL)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
