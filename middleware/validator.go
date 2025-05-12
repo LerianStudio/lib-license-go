@@ -76,10 +76,10 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 		BufferItems: 64,      // number of keys per Get buffer
 	})
 
-	fp := cfg.ApplicationName + "_"
+	fp := cfg.ApplicationName + ":"
 
 	if orgID := cfg.OrganizationID; orgID != "" {
-		fp = fp + commons.HashSHA256(cfg.LicenseKey+"_"+orgID)
+		fp = fp + commons.HashSHA256(cfg.LicenseKey+":"+orgID)
 	} else {
 		fp = fp + commons.HashSHA256(cfg.LicenseKey)
 	}
@@ -102,7 +102,7 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 // Validate checks if the license is valid. Results are cached.
 func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) {
 	// First check cache
-	if val, found := v.cache.Get("license"); found {
+	if val, found := v.cache.Get(v.cfg.fingerprint); found {
 		if r, ok := val.(ValidationResult); ok {
 			v.logger.Info("Using cached license validation", "expires_in_days", r.ExpiryDaysLeft)
 			return r, nil
@@ -123,7 +123,7 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 	// Cache result (using fixed TTL for security)
 	const cacheTTLHours = 24 // One day maximum, hardcoded for security
 	cacheTTL := time.Duration(cacheTTLHours) * time.Hour
-	v.cache.SetWithTTL("license", res, 1, cacheTTL)
+	v.cache.SetWithTTL(v.cfg.fingerprint, res, 1, cacheTTL)
 
 	// Store last successful result for fallback
 	resultCopy := res
