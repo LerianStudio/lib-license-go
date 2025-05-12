@@ -104,7 +104,7 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 	// First check cache
 	if val, found := v.cache.Get(v.cfg.fingerprint); found {
 		if r, ok := val.(ValidationResult); ok {
-			v.logger.Info("Using cached license validation", "expires_in_days", r.ExpiryDaysLeft)
+			v.logger.Info(fmt.Sprintf("Using cached license validation - expires_in_days: %d", r.ExpiryDaysLeft))
 			return r, nil
 		}
 	}
@@ -114,7 +114,7 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 	if err != nil {
 		// Connection errors should use cached result if available
 		if isConnectionError(err) && v.cachedResult != nil {
-			v.logger.Warn("Using cached license validation due to connection error", "error", err.Error())
+			v.logger.Warn(fmt.Sprintf("Using cached license validation due to connection error - error: %s", err.Error()))
 			return *v.cachedResult, nil
 		}
 		return ValidationResult{}, fmt.Errorf("failed to validate license: %w", err)
@@ -156,7 +156,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, erro
 
 	resp, err := v.cli.Do(req)
 	if err != nil {
-		v.logger.Warn("License validation request failed", "error", err.Error())
+		v.logger.Warn(fmt.Sprintf("License validation request failed - error: %s", err.Error()))
 		return ValidationResult{}, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -170,7 +170,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, erro
 		return ValidationResult{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	v.logger.Info("License validated successfully", "expires_in_days", out.ExpiryDaysLeft)
+	v.logger.Info(fmt.Sprintf("License validated successfully - expires_in_days: %d", out.ExpiryDaysLeft))
 	return out, nil
 }
 
@@ -205,8 +205,7 @@ func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 		}
 	}()
 
-	v.logger.Info("Started background license validation",
-		"interval_hours", v.bgConfig.refreshInterval.Hours())
+	v.logger.Info(fmt.Sprintf("Started background license validation - interval_days: %d", int(v.bgConfig.refreshInterval.Hours()/24)))
 }
 
 // attemptValidationWithRetry tries to validate the license with exponential backoff
@@ -226,13 +225,13 @@ func (v *LicenseClient) attemptValidationWithRetry(ctx context.Context) {
 
 		retryCount++
 		if retryCount >= maxRetries {
-			v.logger.Error("Background license validation failed after retries", "error", err.Error())
+			v.logger.Error(fmt.Sprintf("Background license validation failed after retries - error: %s", err.Error()))
 			return
 		}
 
 		// Exponential backoff: 1s, 2s, 4s
 		backoffDuration := time.Duration(1<<uint(retryCount)) * time.Second
-		v.logger.Warn("Retrying license validation", "attempt", retryCount, "backoff_seconds", backoffDuration.Seconds())
+		v.logger.Warn(fmt.Sprintf("Retrying license validation - attempt: %d, backoff_seconds: %.2f", retryCount, backoffDuration.Seconds()))
 
 		select {
 		case <-ctx.Done():
