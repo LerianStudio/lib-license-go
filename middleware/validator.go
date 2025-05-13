@@ -65,7 +65,7 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 	}
 
 	if err := validateEnvVariables(cfg, l); err != nil {
-		l.Error("Invalid environment variables", "error", err.Error())
+		l.Errorf("Invalid environment variables - error: %s", err.Error())
 
 		return nil
 	}
@@ -204,8 +204,6 @@ func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 			}
 		}
 	}()
-
-	v.logger.Info(fmt.Sprintf("Started background license validation - interval_days: %d", int(v.bgConfig.refreshInterval.Hours()/24)))
 }
 
 // attemptValidationWithRetry tries to validate the license with exponential backoff
