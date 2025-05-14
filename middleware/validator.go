@@ -19,10 +19,10 @@ import (
 )
 
 type Config struct {
-	ApplicationName string
-	LicenseKey      string
-	OrganizationID  string
-	APIGatewayURL   string
+	ApplicationName   string
+	LicenseKey        string
+	OrganizationID    string
+	PluginEnvironment string
 
 	fingerprint string
 }
@@ -112,6 +112,22 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 	// Not in cache, so call the license backend
 	res, err := v.callBackend(ctx)
 	if err != nil {
+		// For server errors (5xx), treat as valid to allow operations to continue
+		if IsServerError(err) {
+			v.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", err.Error())
+
+			// If we have a cached result, use it
+			if v.cachedResult != nil {
+				return *v.cachedResult, nil
+			}
+
+			// Otherwise, return a temporary valid result
+			return ValidationResult{
+				Valid:          true,
+				ExpiryDaysLeft: 7, // Temporary 7-day validity during license issues
+			}, nil
+		}
+
 		// Connection errors should use cached result if available
 		if isConnectionError(err) && v.cachedResult != nil {
 			v.logger.Warnf("Using cached license validation due to connection error - error: %s", err.Error())
@@ -134,10 +150,10 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 
 // callBackend makes an API call to validate the license.
 func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, error) {
-	if v.cfg.APIGatewayURL == "" {
-		return ValidationResult{}, errors.New("LERIAN_API_GATEWAY_URL not set")
+	if v.cfg.PluginEnvironment == "" {
+		return ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
-	url := fmt.Sprintf("%s/licenses/validate", v.cfg.APIGatewayURL)
+	url := fmt.Sprintf("https://np0e73vyt5.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
@@ -162,6 +178,12 @@ func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Check if this is a server error (5xx)
+		isServerError := resp.StatusCode >= 500 && resp.StatusCode < 600
+		if isServerError {
+			v.logger.Warnf("Server error during license validation - status: %d", resp.StatusCode)
+			return ValidationResult{}, fmt.Errorf("server error: %d", resp.StatusCode)
+		}
 		return ValidationResult{}, fmt.Errorf("server returned non-200 status: %d", resp.StatusCode)
 	}
 
@@ -246,29 +268,63 @@ func isConnectionError(err error) bool {
 		return false
 	}
 
-	// Check for net.Error interface implementations
-	if netErr, ok := err.(net.Error); ok && (netErr.Timeout() || netErr.Temporary()) {
+	errStr := err.Error()
+
+	// Check for known connection error messages
+	connectionErrors := []string{
+		"connection refused",
+		"no such host",
+		"host unreachable",
+		"i/o timeout",
+		"no route to host",
+		"network is unreachable",
+		"operation timed out",
+		"EOF",
+		"connection reset by peer",
+		"dial tcp",
+		"TLS handshake",
+		"context deadline exceeded",
+		"operation canceled",
+	}
+
+	for _, msg := range connectionErrors {
+		if strings.Contains(strings.ToLower(errStr), strings.ToLower(msg)) {
+			return true
+		}
+	}
+
+	// Check for specific error types
+	var netErr net.Error
+	if errors.As(err, &netErr) {
 		return true
 	}
 
-	// Check common error messages
-	errText := strings.ToLower(err.Error())
-	connectionErrorPatterns := []string{
-		"connection refused",
-		"no such host",
-		"timeout",
-		"connection reset",
-		"eof",
-		"broken pipe",
-		"tls handshake",
-		"i/o timeout",
-		"network is unreachable",
+	// Try to unwrap and check nested error
+	unwrapped := errors.Unwrap(err)
+	if unwrapped != nil && unwrapped != err {
+		return isConnectionError(unwrapped)
 	}
 
-	for _, pattern := range connectionErrorPatterns {
-		if strings.Contains(errText, pattern) {
-			return true
-		}
+	return false
+}
+
+// IsServerError checks if an error is related to a server error (5xx)
+func IsServerError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Check if the error message indicates a server error (5xx)
+	if strings.HasPrefix(errStr, "server error: ") {
+		return true
+	}
+
+	// Try to unwrap and check nested error
+	unwrapped := errors.Unwrap(err)
+	if unwrapped != nil && unwrapped != err {
+		return IsServerError(unwrapped)
 	}
 
 	return false
@@ -303,8 +359,8 @@ func validateEnvVariables(cfg *Config, l log.Logger) error {
 		return errors.New(err)
 	}
 
-	if commons.IsNilOrEmpty(&cfg.APIGatewayURL) {
-		err := "missing api gateway url environment variable"
+	if commons.IsNilOrEmpty(&cfg.PluginEnvironment) {
+		err := "missing plugin environment variable"
 
 		l.Error(err)
 

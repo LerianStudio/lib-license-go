@@ -41,7 +41,12 @@ func (v *LicenseClient) startBackgroundRefreshOnce() {
 
 	if !bgRefreshStarted {
 		bgRefreshStarted = true
-		v.StartBackgroundRefresh(context.Background())
+		
+		// Create a context that can be canceled if needed
+		ctx := context.Background()
+		
+		// Start background refresh
+		v.StartBackgroundRefresh(ctx)
 	}
 }
 

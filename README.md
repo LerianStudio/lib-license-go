@@ -19,7 +19,7 @@ In your environment configuration or `.env` file, set the following environment 
 APPLICATION_NAME=your-application-name
 LICENSE_KEY=your-plugin-license-key
 MIDAZ_ORGANIZATION_ID=your-organization-id
-LERIAN_API_GATEWAY_URL=https://your-api-gateway-url
+PLUGIN_ENVIRONMENT=your-plugin-environment
 ```
 
 ### 2. Create a new instance of the middleware:
@@ -33,7 +33,7 @@ type Config struct {
     ApplicationName        string   `env:"APPLICATION_NAME"`
     LicenseKey             string   `env:"LICENSE_KEY"`
     MidazOrganizationID    string   `env:"MIDAZ_ORGANIZATION_ID"`
-    LerianAPIGatewayURL    string   `env:"LERIAN_API_GATEWAY_URL"`
+    PluginEnvironment      string   `env:"PLUGIN_ENVIRONMENT"`
 }
 
 func InitServers() *Service {
@@ -46,7 +46,7 @@ func InitServers() *Service {
 		    ApplicationName:        cfg.ApplicationName,
 		    LicenseKey:             cfg.LicenseKey,
 		    MidazOrganizationID:    cfg.MidazOrganizationID,
-		    LerianAPIGatewayURL:    cfg.LerianAPIGatewayURL,
+		    PluginEnvironment:      cfg.PluginEnvironment,
 		},
 		&logger,
 	)
