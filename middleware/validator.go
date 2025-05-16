@@ -6,32 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/LerianStudio/lib-commons/commons"
 	"github.com/LerianStudio/lib-commons/commons/log"
 	"github.com/LerianStudio/lib-commons/commons/zap"
+	cn "github.com/LerianStudio/lib-license-go/constant"
+	libErr "github.com/LerianStudio/lib-license-go/error"
+	"github.com/LerianStudio/lib-license-go/model"
+	"github.com/LerianStudio/lib-license-go/util"
 	"github.com/dgraph-io/ristretto"
 )
-
-type Config struct {
-	ApplicationName   string
-	LicenseKey        string
-	OrganizationID    string
-	PluginEnvironment string
-
-	fingerprint string
-}
-
-// ValidationResult contains the data returned by license validation.
-type ValidationResult struct {
-	Valid          bool `json:"valid"`
-	ExpiryDaysLeft int  `json:"expiryDaysLeft,omitempty"`
-}
 
 // backgroundRefreshConfig holds configuration for background refresh
 type backgroundRefreshConfig struct {
@@ -47,15 +34,20 @@ type LicenseClient struct {
 	cli          *http.Client
 	cache        *ristretto.Cache
 	bgConfig     *backgroundRefreshConfig
-	cfg          Config
+	cfg          model.Config
 	logger       log.Logger
-	cachedResult *ValidationResult
+	cachedResult *model.ValidationResult
 }
 
 // NewLicenseClient creates a new license validator with the given config and logger.
 // If logger is nil, defaults to a standard zap logger.
 // The validator includes fingerprint generation, caching, and background validation.
-func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
+func NewLicenseClient(
+	applicationName string,
+	licenseKey string,
+	midazOrganizationID string,
+	pluginEnvironment string,
+	logger *log.Logger) *LicenseClient {
 	var l log.Logger
 
 	if logger != nil {
@@ -64,7 +56,14 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 		l = zap.InitializeLogger()
 	}
 
-	if err := validateEnvVariables(cfg, l); err != nil {
+	cfg := &model.Config{
+		ApplicationName:   applicationName,
+		LicenseKey:        licenseKey,
+		OrganizationID:    midazOrganizationID,
+		PluginEnvironment: pluginEnvironment,
+	}
+
+	if err := util.ValidateEnvVariables(cfg, l); err != nil {
 		l.Errorf("Invalid environment variables - error: %s", err.Error())
 
 		return nil
@@ -76,15 +75,15 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 		BufferItems: 64,      // number of keys per Get buffer
 	})
 
-	fp := cfg.ApplicationName + ":"
+	fp := applicationName + ":"
 
-	if orgID := cfg.OrganizationID; orgID != "" {
-		fp = fp + commons.HashSHA256(cfg.LicenseKey+":"+orgID)
+	if midazOrganizationID != "" {
+		fp = fp + commons.HashSHA256(licenseKey+":"+midazOrganizationID)
 	} else {
-		fp = fp + commons.HashSHA256(cfg.LicenseKey)
+		fp = fp + commons.HashSHA256(licenseKey)
 	}
 
-	cfg.fingerprint = fp
+	cfg.Fingerprint = fp
 
 	return &LicenseClient{
 		cfg:   *cfg,
@@ -100,10 +99,10 @@ func NewLicenseClient(cfg *Config, logger *log.Logger) *LicenseClient {
 }
 
 // Validate checks if the license is valid. Results are cached.
-func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) {
+func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, error) {
 	// First check cache
-	if val, found := v.cache.Get(v.cfg.fingerprint); found {
-		if r, ok := val.(ValidationResult); ok {
+	if val, found := v.cache.Get(v.cfg.Fingerprint); found {
+		if r, ok := val.(model.ValidationResult); ok {
 			v.logger.Infof("Using cached license validation - expires_in_days: %d", r.ExpiryDaysLeft)
 			return r, nil
 		}
@@ -112,34 +111,49 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 	// Not in cache, so call the license backend
 	res, err := v.callBackend(ctx)
 	if err != nil {
-		// For server errors (5xx), treat as valid to allow operations to continue
-		if IsServerError(err) {
-			v.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", err.Error())
+		// Custom error handling by status code
+		if apiErr, ok := err.(*libErr.ApiError); ok {
+			if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
+				v.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
 
-			// If we have a cached result, use it
-			if v.cachedResult != nil {
-				return *v.cachedResult, nil
+				if v.cachedResult != nil {
+					return *v.cachedResult, nil
+				}
+
+				return model.ValidationResult{
+					Valid:             true,
+					ExpiryDaysLeft:    cn.FallbackExpiryDaysLeft,
+					ActiveGracePeriod: true,
+				}, nil
 			}
 
-			// Otherwise, return a temporary valid result
-			return ValidationResult{
-				Valid:          true,
-				ExpiryDaysLeft: 7, // Temporary 7-day validity during license issues
-			}, nil
+			if apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
+				v.logger.Errorf("Exiting: license validation failed with client error (4xx): %s", apiErr.Error())
+				v.ShutdownBackgroundRefresh()
+				panic("license validation failed with client error (4xx)")
+			}
 		}
 
 		// Connection errors should use cached result if available
-		if isConnectionError(err) && v.cachedResult != nil {
+		if libErr.IsConnectionError(err) && v.cachedResult != nil {
 			v.logger.Warnf("Using cached license validation due to connection error - error: %s", err.Error())
 			return *v.cachedResult, nil
 		}
-		return ValidationResult{}, fmt.Errorf("failed to validate license: %w", err)
+
+		return model.ValidationResult{}, fmt.Errorf("failed to validate license: %w", err)
+	}
+
+	// 200 OK: check license validity
+	if !res.Valid && !res.ActiveGracePeriod {
+		v.logger.Errorf("Exiting: license is not valid and no grace period is active!")
+		v.ShutdownBackgroundRefresh()
+		panic("license is not valid and no grace period is active!")
 	}
 
 	// Cache result (using fixed TTL for security)
 	const cacheTTLHours = 24 // One day maximum, hardcoded for security
 	cacheTTL := time.Duration(cacheTTLHours) * time.Hour
-	v.cache.SetWithTTL(v.cfg.fingerprint, res, 1, cacheTTL)
+	v.cache.SetWithTTL(v.cfg.Fingerprint, res, 1, cacheTTL)
 
 	// Store last successful result for fallback
 	resultCopy := res
@@ -149,54 +163,59 @@ func (v *LicenseClient) Validate(ctx context.Context) (ValidationResult, error) 
 }
 
 // callBackend makes an API call to validate the license.
-func (v *LicenseClient) callBackend(ctx context.Context) (ValidationResult, error) {
+func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult, error) {
 	if v.cfg.PluginEnvironment == "" {
-		return ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
+		return model.ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
 	url := fmt.Sprintf("https://np0e73vyt5.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
-		"fingerprint": v.cfg.fingerprint,
+		"fingerprint": v.cfg.Fingerprint,
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return ValidationResult{}, fmt.Errorf("failed to marshal request body: %w", err)
+		return model.ValidationResult{}, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		return ValidationResult{}, fmt.Errorf("failed to create request: %w", err)
+		return model.ValidationResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := v.cli.Do(req)
 	if err != nil {
 		v.logger.Warnf("License validation request failed - error: %s", err.Error())
-		return ValidationResult{}, fmt.Errorf("request failed: %w", err)
+		return model.ValidationResult{}, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Check if this is a server error (5xx)
-		isServerError := resp.StatusCode >= 500 && resp.StatusCode < 600
-		if isServerError {
+		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 			v.logger.Warnf("Server error during license validation - status: %d", resp.StatusCode)
-			return ValidationResult{}, fmt.Errorf("server error: %d", resp.StatusCode)
+			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 		}
-		return ValidationResult{}, fmt.Errorf("server returned non-200 status: %d", resp.StatusCode)
+		// 4xx error: log and propagate
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			v.logger.Errorf("Client error during license validation - status: %d", resp.StatusCode)
+			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
+		}
+		return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 	}
 
-	var out ValidationResult
+	var out model.ValidationResult
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return ValidationResult{}, fmt.Errorf("failed to decode response: %w", err)
+		return model.ValidationResult{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	v.logger.Infof("License validated successfully - expires_in_days: %d", out.ExpiryDaysLeft)
+	v.logger.Infof("License validated successfully - expires_in_days: %d, grace_period: %t", out.ExpiryDaysLeft, out.ActiveGracePeriod)
 	return out, nil
 }
 
 // StartBackgroundRefresh runs a ticker to refresh license weekly.
+//
+// Note: os.Exit(1) in Validate will terminate the process even if called from this goroutine.
 func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 	v.bgConfig.mu.Lock()
 	if v.bgConfig.started {
@@ -229,6 +248,8 @@ func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 }
 
 // attemptValidationWithRetry tries to validate the license with exponential backoff
+//
+// Note: os.Exit(1) in Validate will terminate the process even if called from this goroutine.
 func (v *LicenseClient) attemptValidationWithRetry(ctx context.Context) {
 	v.bgConfig.mu.Lock()
 	v.bgConfig.lastAttemptedRefresh = time.Now()
@@ -260,112 +281,4 @@ func (v *LicenseClient) attemptValidationWithRetry(ctx context.Context) {
 			// Continue to next attempt
 		}
 	}
-}
-
-// isConnectionError checks if an error is likely related to network connectivity
-func isConnectionError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errStr := err.Error()
-
-	// Check for known connection error messages
-	connectionErrors := []string{
-		"connection refused",
-		"no such host",
-		"host unreachable",
-		"i/o timeout",
-		"no route to host",
-		"network is unreachable",
-		"operation timed out",
-		"EOF",
-		"connection reset by peer",
-		"dial tcp",
-		"TLS handshake",
-		"context deadline exceeded",
-		"operation canceled",
-	}
-
-	for _, msg := range connectionErrors {
-		if strings.Contains(strings.ToLower(errStr), strings.ToLower(msg)) {
-			return true
-		}
-	}
-
-	// Check for specific error types
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-
-	// Try to unwrap and check nested error
-	unwrapped := errors.Unwrap(err)
-	if unwrapped != nil && unwrapped != err {
-		return isConnectionError(unwrapped)
-	}
-
-	return false
-}
-
-// IsServerError checks if an error is related to a server error (5xx)
-func IsServerError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errStr := err.Error()
-
-	// Check if the error message indicates a server error (5xx)
-	if strings.HasPrefix(errStr, "server error: ") {
-		return true
-	}
-
-	// Try to unwrap and check nested error
-	unwrapped := errors.Unwrap(err)
-	if unwrapped != nil && unwrapped != err {
-		return IsServerError(unwrapped)
-	}
-
-	return false
-}
-
-func validateEnvVariables(cfg *Config, l log.Logger) error {
-	if cfg == nil {
-		return errors.New("license client config is nil")
-	}
-
-	if commons.IsNilOrEmpty(&cfg.ApplicationName) {
-		err := "missing application name environment variable"
-
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	if commons.IsNilOrEmpty(&cfg.LicenseKey) {
-		err := "missing license key environment variable"
-
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	if commons.IsNilOrEmpty(&cfg.OrganizationID) {
-		err := "missing organization ID environment variable"
-
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	if commons.IsNilOrEmpty(&cfg.PluginEnvironment) {
-		err := "missing plugin environment variable"
-
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	return nil
 }

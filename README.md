@@ -42,12 +42,10 @@ func InitServers() *Service {
 	logger := zap.InitializeLogger()
 	
 	licenseClient := libLicense.NewLicenseClient(
-		&libLicense.Config{
-		    ApplicationName:        cfg.ApplicationName,
-		    LicenseKey:             cfg.LicenseKey,
-		    MidazOrganizationID:    cfg.MidazOrganizationID,
-		    PluginEnvironment:      cfg.PluginEnvironment,
-		},
+		cfg.ApplicationName,
+		cfg.LicenseKey,
+		cfg.MidazOrganizationID,
+		cfg.PluginEnvironment,
 		&logger,
 	)
 
@@ -73,10 +71,26 @@ func NewRoutes(license *libLicense.LicenseClient, [...]) *fiber.App {
     
     // Applications routes
     f.Get("/v1/applications", applicationHandler.GetApplications)
+}
+```
 
-    f.Shutdown(func() {
-        license.ShutdownBackgroundRefresh()
-    })
+#### Add graceful shutdown support in your server using the `lib-commons` package function `StartServerWithGracefulShutdown`
+
+```go
+libCommons "github.com/LerianStudio/lib-commons/commons/shutdown"
+
+func (s *Server) Run(l *commons.Launcher) error {
+	s.Info("Starting server with graceful shutdown support")
+
+	libCommons.StartServerWithGracefulShutdown(
+		s.app,
+		s.licenseClient,
+		&s.Telemetry,
+		s.ServerAddress(),
+		s.Logger,
+	)
+
+	return nil
 }
 ```
 

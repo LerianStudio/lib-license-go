@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
@@ -23,7 +22,7 @@ func (v *LicenseClient) ShutdownBackgroundRefresh() {
 	if v.bgConfig.cancel != nil {
 		v.bgConfig.cancel()
 		v.bgConfig.cancel = nil
-		log.Println("[license-sdk] Background license validation stopped")
+		v.logger.Info("Background license validation stopped")
 	}
 	v.bgConfig.started = false
 }
@@ -41,10 +40,10 @@ func (v *LicenseClient) startBackgroundRefreshOnce() {
 
 	if !bgRefreshStarted {
 		bgRefreshStarted = true
-		
+
 		// Create a context that can be canceled if needed
 		ctx := context.Background()
-		
+
 		// Start background refresh
 		v.StartBackgroundRefresh(ctx)
 	}
@@ -63,14 +62,14 @@ func (v *LicenseClient) Middleware() fiber.Handler {
 
 		res, err := v.Validate(ctx)
 		if err != nil {
-			log.Printf("[license-sdk] License validation failed: %s", err.Error())
+			v.logger.Warnf("License validation failed: %s", err.Error())
 			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
 				"error": "License validation failed",
 			})
 		}
 
-		if !res.Valid {
-			log.Printf("[license-sdk] Invalid license detected (expires in %d days)", res.ExpiryDaysLeft)
+		if !res.Valid && !res.ActiveGracePeriod {
+			v.logger.Warnf("Invalid license detected (expires in %d days, grace period: %t)", res.ExpiryDaysLeft, res.ActiveGracePeriod)
 			return c.Status(http.StatusForbidden).JSON(fiber.Map{
 				"error": "Invalid license",
 			})
@@ -78,6 +77,7 @@ func (v *LicenseClient) Middleware() fiber.Handler {
 
 		// Propagate expiration information to response headers
 		c.Set("X-License-Expiry-Days", fmt.Sprintf("%d", res.ExpiryDaysLeft))
+		c.Set("X-License-Grace-Period", fmt.Sprintf("%t", res.ActiveGracePeriod))
 
 		// Continue to the next handler
 		return c.Next()
