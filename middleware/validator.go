@@ -92,7 +92,7 @@ func NewLicenseClient(
 			Timeout: 5 * time.Second,
 		},
 		bgConfig: &backgroundRefreshConfig{
-			refreshInterval: 7 * 24 * time.Hour,
+			refreshInterval: 2 * time.Hour,
 		},
 		logger: l,
 	}
