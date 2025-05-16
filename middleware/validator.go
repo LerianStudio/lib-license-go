@@ -167,7 +167,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 	if v.cfg.PluginEnvironment == "" {
 		return model.ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
-	url := fmt.Sprintf("https://np0e73vyt5.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
+	url := fmt.Sprintf("https://bvw0jdseqi-vpce-0679ac4f17e2a323c.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
