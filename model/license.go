@@ -1,9 +1,9 @@
 package model
 
 type Config struct {
-	ApplicationName   string
-	LicenseKey        string
-	OrganizationID    string
-	PluginEnvironment string
-	Fingerprint       string
+	ApplicationName   string `json:"applicationName"`
+	LicenseKey        string `json:"licenseKey"`
+	OrganizationID    string `json:"organizationId"`
+	PluginEnvironment string `json:"pluginEnvironment"`
+	Fingerprint       string `json:"fingerprint"`
 }
