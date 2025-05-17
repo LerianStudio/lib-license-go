@@ -152,7 +152,7 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 	}
 
 	// Cache result (using fixed TTL for security)
-	const cacheTTLHours = 24 // One day maximum, hardcoded for security
+	const cacheTTLHours = 3 // 3 hours maximum, hardcoded for security
 	cacheTTL := time.Duration(cacheTTLHours) * time.Hour
 	v.cache.SetWithTTL(v.cfg.Fingerprint, res, 1, cacheTTL)
 
