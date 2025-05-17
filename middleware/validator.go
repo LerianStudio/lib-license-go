@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -128,9 +129,9 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 			}
 
 			if apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
-				v.logger.Errorf("Exiting: license validation failed with client error (4xx): %s", apiErr.Error())
+				v.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
 				v.ShutdownBackgroundRefresh()
-				panic("license validation failed with client error (4xx)")
+				panic("license validation failed with client error")
 			}
 		}
 
@@ -192,15 +193,27 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		var errorResp model.ErrorResponse
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		_ = json.Unmarshal(bodyBytes, &errorResp)
+
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-			v.logger.Warnf("Server error during license validation - status: %d", resp.StatusCode)
+			v.logger.Warnf("Server error during license validation - status: %d, code: %s, message: %s",
+				resp.StatusCode, errorResp.Code, errorResp.Message)
 			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 		}
 		// 4xx error: log and propagate
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			v.logger.Errorf("Client error during license validation - status: %d", resp.StatusCode)
+			v.logger.Errorf("Client error during license validation - status: %d, code: %s, message: %s",
+				resp.StatusCode, errorResp.Code, errorResp.Message)
 			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
 		}
+
+		v.logger.Errorf("Unexpected error during license validation - status: %d, code: %s, message: %s",
+			resp.StatusCode, errorResp.Code, errorResp.Message)
 		return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 	}
 

@@ -6,3 +6,9 @@ type ValidationResult struct {
 	ExpiryDaysLeft    int  `json:"expiryDaysLeft,omitempty"`
 	ActiveGracePeriod bool `json:"activeGracePeriod,omitempty"`
 }
+
+// ErrorResponse contains error information returned by the license API
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
