@@ -104,7 +104,7 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 	// First check cache
 	if val, found := v.cache.Get(v.cfg.Fingerprint); found {
 		if r, ok := val.(model.ValidationResult); ok {
-			v.logger.Infof("Using cached license validation - expires_in_days: %d", r.ExpiryDaysLeft)
+			v.logger.Infof("License cached [expires: %d days | grace: %t]", r.ExpiryDaysLeft, r.ActiveGracePeriod)
 			return r, nil
 		}
 	}
