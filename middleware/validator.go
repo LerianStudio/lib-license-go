@@ -222,7 +222,7 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 		return model.ValidationResult{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	v.logger.Infof("License validated successfully - expires_in_days: %d, grace_period: %t", out.ExpiryDaysLeft, out.ActiveGracePeriod)
+	v.logger.Infof("License valid [expires: %d days | grace: %t]", out.ExpiryDaysLeft, out.ActiveGracePeriod)
 	return out, nil
 }
 
