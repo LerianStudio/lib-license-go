@@ -22,7 +22,7 @@ func (v *LicenseClient) ShutdownBackgroundRefresh() {
 	if v.bgConfig.cancel != nil {
 		v.bgConfig.cancel()
 		v.bgConfig.cancel = nil
-		v.logger.Info("Background license validation stopped")
+		v.logger.Debug("Background license validation stopped")
 	}
 	v.bgConfig.started = false
 }
