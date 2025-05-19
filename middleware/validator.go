@@ -201,18 +201,18 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 		_ = json.Unmarshal(bodyBytes, &errorResp)
 
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-			v.logger.Warnf("Server error during license validation - status: %d, code: %s, message: %s",
+			v.logger.Debugf("Server error during license validation - status: %d, code: %s, message: %s",
 				resp.StatusCode, errorResp.Code, errorResp.Message)
 			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 		}
 		// 4xx error: log and propagate
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			v.logger.Errorf("Client error during license validation - status: %d, code: %s, message: %s",
+			v.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
 				resp.StatusCode, errorResp.Code, errorResp.Message)
 			return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
 		}
 
-		v.logger.Errorf("Unexpected error during license validation - status: %d, code: %s, message: %s",
+		v.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
 		return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 	}
