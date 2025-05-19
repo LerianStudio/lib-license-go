@@ -146,9 +146,9 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 
 	// 200 OK: check license validity
 	if !res.Valid && !res.ActiveGracePeriod {
-		v.logger.Errorf("Exiting: license is not valid and no grace period is active!")
+		v.logger.Errorf("Invalid license: neither active license nor grace period detected")
 		v.ShutdownBackgroundRefresh()
-		panic("license is not valid and no grace period is active!")
+		panic("terminating: invalid license state - no active license or grace period")
 	}
 
 	// Cache result (using fixed TTL for security)
@@ -159,6 +159,8 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 	// Store last successful result for fallback
 	resultCopy := res
 	v.cachedResult = &resultCopy
+
+	v.logger.Infof("License valid [expires: %d days | grace: %t]", res.ExpiryDaysLeft, res.ActiveGracePeriod)
 
 	return res, nil
 }
@@ -222,7 +224,6 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 		return model.ValidationResult{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	v.logger.Infof("License valid [expires: %d days | grace: %t]", out.ExpiryDaysLeft, out.ActiveGracePeriod)
 	return out, nil
 }
 
@@ -251,7 +252,7 @@ func (v *LicenseClient) StartBackgroundRefresh(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				v.logger.Info("Background license validation stopped")
+				v.logger.Debug("Background license validation stopped")
 				return
 			case <-ticker.C:
 				v.attemptValidationWithRetry(ctx)
