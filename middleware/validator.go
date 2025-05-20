@@ -169,13 +169,12 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 func (v *LicenseClient) logLicenseStatus(res model.ValidationResult) {
 	// License is valid, check if it's approaching expiration
 	if res.Valid {
+		// Use else-if structure to ensure only one message is shown
 		if res.ExpiryDaysLeft <= 7 {
-			// License valid and within 7 days of expiration
+			// License valid and within 7 days of expiration - urgent warning
 			v.logger.Warnf("WARNING: License expires in %d days. Contact your account manager to renew", res.ExpiryDaysLeft)
-		}
-
-		if res.ExpiryDaysLeft <= 30 {
-			// License valid and within 30 days of expiration
+		} else if res.ExpiryDaysLeft <= 30 {
+			// License valid but approaching expiration - normal warning
 			v.logger.Warnf("License expires in %d days", res.ExpiryDaysLeft)
 		}
 
