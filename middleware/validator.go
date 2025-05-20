@@ -160,9 +160,38 @@ func (v *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, e
 	resultCopy := res
 	v.cachedResult = &resultCopy
 
-	v.logger.Infof("License valid [expires: %d days | grace: %t]", res.ExpiryDaysLeft, res.ActiveGracePeriod)
+	v.logLicenseStatus(res)
 
 	return res, nil
+}
+
+// logLicenseStatus logs appropriate messages based on license validation result.
+func (v *LicenseClient) logLicenseStatus(res model.ValidationResult) {
+	// License is valid, check if it's approaching expiration
+	if res.Valid {
+		if res.ExpiryDaysLeft <= 7 {
+			// License valid and within 7 days of expiration
+			v.logger.Warnf("WARNING: License expires in %d days. Contact your account manager to renew", res.ExpiryDaysLeft)
+		}
+
+		if res.ExpiryDaysLeft <= 30 {
+			// License valid and within 30 days of expiration
+			v.logger.Warnf("License expires in %d days", res.ExpiryDaysLeft)
+		}
+
+		return
+	}
+
+	// License is in grace period
+	if res.ActiveGracePeriod {
+		if res.ExpiryDaysLeft <= 7 {
+			// License grace period is about to expire, application will terminate and license will be suspended
+			v.logger.Warnf("CRITICAL: Grace period ends in %d days - application will terminate. Contact support immediately to renew license", res.ExpiryDaysLeft)
+		} else {
+			// License just expired, but is in grace period
+			v.logger.Warnf("License expired! Running in grace period (%d days remaining)", res.ExpiryDaysLeft)
+		}
+	}
 }
 
 // callBackend makes an API call to validate the license.
