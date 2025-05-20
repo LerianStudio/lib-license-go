@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
@@ -52,34 +50,18 @@ func (v *LicenseClient) startBackgroundRefreshOnce() {
 // Middleware returns a Fiber middleware that validates licenses.
 // This middleware will automatically start background license validation
 // exactly once across all instances.
+// 
+// The actual license validation happens in the background process which
+// terminates the application if the license becomes invalid.
 func (v *LicenseClient) Middleware() fiber.Handler {
+	// Start background validation exactly once
 	v.startBackgroundRefreshOnce()
 
 	return func(c *fiber.Ctx) error {
-		// Create a child context with timeout for validation
-		ctx, cancel := context.WithTimeout(c.Context(), v.cli.Timeout)
-		defer cancel()
-
-		res, err := v.Validate(ctx)
-		if err != nil {
-			v.logger.Warnf("License validation failed: %s", err.Error())
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
-				"error": "License validation failed",
-			})
-		}
-
-		if !res.Valid && !res.ActiveGracePeriod {
-			v.logger.Warnf("Invalid license detected (expires in %d days, grace period: %t)", res.ExpiryDaysLeft, res.ActiveGracePeriod)
-			return c.Status(http.StatusForbidden).JSON(fiber.Map{
-				"error": "Invalid license",
-			})
-		}
-
-		// Propagate expiration information to response headers
-		c.Set("X-License-Expiry-Days", fmt.Sprintf("%d", res.ExpiryDaysLeft))
-		c.Set("X-License-Grace-Period", fmt.Sprintf("%t", res.ActiveGracePeriod))
-
-		// Continue to the next handler
+		// No need to validate on every request - the background process already
+		// validates and will terminate the application if license is invalid
+		
+		// Simply continue to the next handler
 		return c.Next()
 	}
 }
