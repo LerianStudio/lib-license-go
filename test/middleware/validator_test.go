@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LerianStudio/lib-license-go/internal/api"
 	"github.com/LerianStudio/lib-license-go/middleware"
 	"github.com/LerianStudio/lib-license-go/test/helper"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,6 @@ const (
 	testOrgID      = "test-org"
 	testEnv        = "test-env"
 )
-
 
 func TestLicenseValidation(t *testing.T) {
 	setupTestEnv(t)
@@ -155,8 +155,8 @@ func TestLicenseValidation(t *testing.T) {
 			t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
 
 			// Set test server URL for license validation
-			middleware.SetTestLicenseBaseURL(ts.URL)
-			
+			api.SetTestLicenseBaseURL(ts.URL)
+
 			// Create a new client with the mock logger and custom HTTP client
 			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, mockLogger)
 			// Override the HTTP client to use our test client
@@ -185,9 +185,9 @@ func TestLicenseValidation(t *testing.T) {
 
 			// Verify all expected mock calls were made
 			mockLoggerImpl.AssertExpectations(t)
-			
+
 			// Reset the test URL to prevent side effects between tests
-			middleware.ResetTestLicenseBaseURL()
+			api.ResetTestLicenseBaseURL()
 		})
 	}
 }
