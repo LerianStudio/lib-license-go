@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +22,26 @@ import (
 	"github.com/LerianStudio/lib-license-go/util"
 	"github.com/dgraph-io/ristretto"
 )
+
+// getLicenseBaseURL returns the base URL for license validation API
+// It checks environment variables in this order of precedence:
+// 1. TEST_MIDAZ_LICENSE_URL (for test environments)
+// 2. MIDAZ_LICENSE_URL (for production)
+// 3. Default URL if neither is set
+func getLicenseBaseURL() string {
+	// Check test environment variable first
+	if url := os.Getenv("TEST_MIDAZ_LICENSE_URL"); url != "" {
+		return strings.TrimSuffix(url, "/")
+	}
+
+	// Then check production environment variable
+	if url := os.Getenv("MIDAZ_LICENSE_URL"); url != "" {
+		return strings.TrimSuffix(url, "/")
+	}
+
+	// Default fallback URL
+	return "https://bvw0jdseqi-vpce-0679ac4f17e2a323c.execute-api.us-east-2.amazonaws.com"
+}
 
 // backgroundRefreshConfig holds configuration for background refresh
 type backgroundRefreshConfig struct {
@@ -38,6 +60,12 @@ type LicenseClient struct {
 	cfg          model.Config
 	logger       log.Logger
 	cachedResult *model.ValidationResult
+}
+
+// SetHTTPClient sets a custom HTTP client for the license client.
+// This is primarily useful for testing purposes.
+func (v *LicenseClient) SetHTTPClient(client *http.Client) {
+	v.cli = client
 }
 
 // NewLicenseClient creates a new license validator with the given config and logger.
@@ -198,7 +226,10 @@ func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult
 	if v.cfg.PluginEnvironment == "" {
 		return model.ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
-	url := fmt.Sprintf("https://bvw0jdseqi-vpce-0679ac4f17e2a323c.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
+	
+	// Get base URL from environment or use default
+	baseURL := getLicenseBaseURL()
+	url := fmt.Sprintf("%s/%s/licenses/validate", baseURL, v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,
