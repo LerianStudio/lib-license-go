@@ -42,17 +42,28 @@ func NewLicenseClient(appID, licenseKey, orgID, env string, logger *log.Logger) 
 }
 
 // Middleware creates a Fiber middleware that validates the license
+// It immediately validates the license when called and starts background refresh
 func (c *LicenseClient) Middleware() fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
-		// Start background refresh if client is valid
-		if c != nil && c.validator != nil {
-			// Start background validation in a separate goroutine
-			// This will continuously validate the license in the background
-			go c.validator.StartBackgroundRefresh(ctx.Context())
+	// Immediately validate the license when middleware is created
+	if c != nil && c.validator != nil {
+		// Initial validation to ensure license is valid before server starts accepting requests
+		backgroundCtx := context.Background()
+		// Validate immediately - this will panic and terminate if license is invalid
+		_, err := c.validator.Validate(backgroundCtx)
+		if err != nil {
+			c.logger.Errorf("Initial license validation failed: %v", err)
+			// Error will trigger termination through the termination handler
+		} else {
+			c.logger.Info("License validation successful, starting background refresh")
+			// Start background refresh if validation succeeded
+			go c.validator.StartBackgroundRefresh(backgroundCtx)
 		}
+	}
 
+	// Return the middleware handler
+	return func(ctx *fiber.Ctx) error {
 		// Always proceed to the next handler
-		// The background validation will terminate the application if needed
+		// If license is invalid, application would have terminated before reaching here
 		return ctx.Next()
 	}
 }
