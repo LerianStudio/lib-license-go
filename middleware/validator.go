@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,26 +20,6 @@ import (
 	"github.com/LerianStudio/lib-license-go/util"
 	"github.com/dgraph-io/ristretto"
 )
-
-// getLicenseBaseURL returns the base URL for license validation API
-// It checks environment variables in this order of precedence:
-// 1. TEST_MIDAZ_LICENSE_URL (for test environments)
-// 2. MIDAZ_LICENSE_URL (for production)
-// 3. Default URL if neither is set
-func getLicenseBaseURL() string {
-	// Check test environment variable first
-	if url := os.Getenv("TEST_MIDAZ_LICENSE_URL"); url != "" {
-		return strings.TrimSuffix(url, "/")
-	}
-
-	// Then check production environment variable
-	if url := os.Getenv("MIDAZ_LICENSE_URL"); url != "" {
-		return strings.TrimSuffix(url, "/")
-	}
-
-	// Default fallback URL
-	return "https://bvw0jdseqi-vpce-0679ac4f17e2a323c.execute-api.us-east-2.amazonaws.com"
-}
 
 // backgroundRefreshConfig holds configuration for background refresh
 type backgroundRefreshConfig struct {
@@ -221,14 +199,15 @@ func (v *LicenseClient) logLicenseStatus(res model.ValidationResult) {
 	}
 }
 
+// baseURL is used to store the license validation API URL
+// By default, it is set to the fixed value and can only be changed via internal test helpers
+var baseURL = cn.DefaultLicenseGatewayBaseURL
+
 // callBackend makes an API call to validate the license.
 func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult, error) {
 	if v.cfg.PluginEnvironment == "" {
 		return model.ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
-	
-	// Get base URL from environment or use default
-	baseURL := getLicenseBaseURL()
 	url := fmt.Sprintf("%s/%s/licenses/validate", baseURL, v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{

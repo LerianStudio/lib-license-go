@@ -151,10 +151,12 @@ func TestLicenseValidation(t *testing.T) {
 			httpClient := newTestClient(ts)
 
 			// Set required environment variables
-			t.Setenv("TEST_MIDAZ_LICENSE_URL", ts.URL)
 			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
 			t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
 
+			// Set test server URL for license validation
+			middleware.SetTestLicenseBaseURL(ts.URL)
+			
 			// Create a new client with the mock logger and custom HTTP client
 			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, mockLogger)
 			// Override the HTTP client to use our test client
@@ -183,6 +185,9 @@ func TestLicenseValidation(t *testing.T) {
 
 			// Verify all expected mock calls were made
 			mockLoggerImpl.AssertExpectations(t)
+			
+			// Reset the test URL to prevent side effects between tests
+			middleware.ResetTestLicenseBaseURL()
 		})
 	}
 }
@@ -192,7 +197,6 @@ func setupTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
 	t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
-	// Don't set MIDAZ_LICENSE_URL here - let the test cases set it
 }
 
 // newTestClient returns a client with a custom transport for testing
