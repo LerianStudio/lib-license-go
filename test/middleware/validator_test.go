@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,11 +9,9 @@ import (
 	"time"
 
 	"github.com/LerianStudio/lib-license-go/middleware"
-	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/test/helper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 // TestCase is defined in validator_test_helper.go
@@ -26,20 +23,6 @@ const (
 	testEnv        = "test-env"
 )
 
-// mockHTTPClient returns a test server URL and a function to close it
-func mockHTTPClient(t *testing.T, statusCode int, response any) (string, func()) {
-	t.Helper()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusCode)
-		if response != nil {
-			json.NewEncoder(w).Encode(response)
-		}
-	}))
-
-	return server.URL, server.Close
-}
 
 func TestLicenseValidation(t *testing.T) {
 	setupTestEnv(t)
@@ -64,25 +47,7 @@ func TestLicenseValidation(t *testing.T) {
 			testCase: TestCase{
 				Name: "Valid license with 30 days left",
 				SetupServer: func(t *testing.T) *httptest.Server {
-					return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						assert.Equal(t, "/test-env/licenses/validate", r.URL.Path)
-						assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-						// Parse request body
-						var reqBody map[string]string
-						err := json.NewDecoder(r.Body).Decode(&reqBody)
-						require.NoError(t, err)
-						assert.Equal(t, "test-key", reqBody["licenseKey"])
-
-						// Return a valid license response
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusOK)
-						json.NewEncoder(w).Encode(model.ValidationResult{
-							Valid:             true,
-							ExpiryDaysLeft:    30,
-							ActiveGracePeriod: false,
-						})
-					}))
+					return httptest.NewServer(jsonResponse(t, http.StatusOK, validationResult(true, 30)))
 				},
 				ExpectedValid: true,
 				ExpectedDays:  30,
@@ -100,20 +65,9 @@ func TestLicenseValidation(t *testing.T) {
 			testCase: TestCase{
 				Name: "Expired license in grace period",
 				SetupServer: func(t *testing.T) *httptest.Server {
-					return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						// Parse request body
-						var reqBody map[string]string
-						err := json.NewDecoder(r.Body).Decode(&reqBody)
-						require.NoError(t, err)
-
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusOK)
-						json.NewEncoder(w).Encode(model.ValidationResult{
-							Valid:             false,
-							ExpiryDaysLeft:    5,
-							ActiveGracePeriod: true,
-						})
-					}))
+					result := validationResult(false, 5)
+					result.ActiveGracePeriod = true
+					return httptest.NewServer(jsonResponse(t, http.StatusOK, result))
 				},
 				ExpectedValid: false,
 				ExpectedDays:  5,
@@ -130,13 +84,9 @@ func TestLicenseValidation(t *testing.T) {
 			testCase: TestCase{
 				Name: "Invalid license",
 				SetupServer: func(t *testing.T) *httptest.Server {
-					return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusForbidden)
-						json.NewEncoder(w).Encode(map[string]any{
-							"code":    "INVALID_LICENSE",
-							"message": "invalid license",
-						})
+					return httptest.NewServer(jsonResponse(t, http.StatusForbidden, map[string]any{
+						"code":    "INVALID_LICENSE",
+						"message": "invalid license",
 					}))
 				},
 				ExpectedValid: false,
@@ -151,12 +101,9 @@ func TestLicenseValidation(t *testing.T) {
 			testCase: TestCase{
 				Name: "Server error",
 				SetupServer: func(t *testing.T) *httptest.Server {
-					return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						w.WriteHeader(http.StatusInternalServerError)
-						json.NewEncoder(w).Encode(map[string]any{
-							"code":    "INTERNAL_SERVER_ERROR",
-							"message": "internal server error",
-						})
+					return httptest.NewServer(jsonResponse(t, http.StatusInternalServerError, map[string]any{
+						"code":    "INTERNAL_SERVER_ERROR",
+						"message": "internal server error",
 					}))
 				},
 				ExpectedValid: false,
@@ -177,13 +124,8 @@ func TestLicenseValidation(t *testing.T) {
 			testCase: TestCase{
 				Name: "Server error",
 				SetupServer: func(t *testing.T) *httptest.Server {
-					return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						// Simulate a server error
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusInternalServerError)
-						json.NewEncoder(w).Encode(map[string]string{
-							"error": "server error",
-						})
+					return httptest.NewServer(jsonResponse(t, http.StatusInternalServerError, map[string]string{
+						"error": "server error",
 					}))
 				},
 				ExpectedValid: true,
