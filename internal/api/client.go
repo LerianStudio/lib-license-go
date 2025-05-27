@@ -70,7 +70,13 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 	if err != nil {
 		return model.ValidationResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
+	// Set required headers
 	req.Header.Set("Content-Type", "application/json")
+	
+	// Add organization ID as API key in header
+	if c.config.OrganizationID != "" {
+		req.Header.Set("x-api-key", c.config.OrganizationID)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
