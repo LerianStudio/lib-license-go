@@ -40,6 +40,12 @@ type LicenseClient struct {
 	cachedResult *model.ValidationResult
 }
 
+// SetHTTPClient sets a custom HTTP client for the license client.
+// This is primarily useful for testing purposes.
+func (v *LicenseClient) SetHTTPClient(client *http.Client) {
+	v.cli = client
+}
+
 // NewLicenseClient creates a new license validator with the given config and logger.
 // If logger is nil, defaults to a standard zap logger.
 // The validator includes fingerprint generation, caching, and background validation.
@@ -193,12 +199,16 @@ func (v *LicenseClient) logLicenseStatus(res model.ValidationResult) {
 	}
 }
 
+// baseURL is used to store the license validation API URL
+// By default, it is set to the fixed value and can only be changed via internal test helpers
+var baseURL = cn.DefaultLicenseGatewayBaseURL
+
 // callBackend makes an API call to validate the license.
 func (v *LicenseClient) callBackend(ctx context.Context) (model.ValidationResult, error) {
 	if v.cfg.PluginEnvironment == "" {
 		return model.ValidationResult{}, errors.New("PLUGIN_ENVIRONMENT not set")
 	}
-	url := fmt.Sprintf("https://bvw0jdseqi-vpce-0679ac4f17e2a323c.execute-api.us-east-2.amazonaws.com/%s/licenses/validate", v.cfg.PluginEnvironment)
+	url := fmt.Sprintf("%s/%s/licenses/validate", baseURL, v.cfg.PluginEnvironment)
 
 	reqBody := map[string]string{
 		"licenseKey":  v.cfg.LicenseKey,

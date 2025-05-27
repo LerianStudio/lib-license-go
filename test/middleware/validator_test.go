@@ -1,126 +1,232 @@
-package middleware_test
+package middleware
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 
-	"github.com/LerianStudio/lib-commons/commons/log"
-	"github.com/LerianStudio/lib-license-go/model"
-	"go.uber.org/mock/gomock"
+	"github.com/LerianStudio/lib-license-go/middleware"
+	"github.com/LerianStudio/lib-license-go/test/helper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// TestLicenseClient tests the license validation functionality
-func TestLicenseClient(t *testing.T) {
-	// Create test table
+// TestCase is defined in validator_test_helper.go
+
+const (
+	testAppID      = "test-app"
+	testLicenseKey = "test-key"
+	testOrgID      = "test-org"
+	testEnv        = "test-env"
+)
+
+
+func TestLicenseValidation(t *testing.T) {
+	setupTestEnv(t)
+
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   interface{}
-		expectValid    bool
-		expectGrace    bool
-		expectPanic    bool
-		expectedDays   int
+		name          string
+		setupMocks    func(*helper.MockLogger)
+		testCase      TestCase
+		expectError   bool
+		expectedValid bool
+		expectedDays  int
 	}{
 		{
-			name:         "Valid license",
-			statusCode:   http.StatusOK,
-			responseBody: model.ValidationResult{Valid: true, ExpiryDaysLeft: 30},
-			expectValid:  true,
-			expectGrace:  false,
-			expectPanic:  false,
-			expectedDays: 30,
+			name: "Valid license with 30 days left",
+			setupMocks: func(l *helper.MockLogger) {
+				l.On("Infof", mock.Anything, mock.Anything).Maybe()
+				l.On("Warnf", "License expires in %d days", 30).Once()
+			},
+			expectError:   false,
+			expectedValid: true,
+			expectedDays:  30,
+			testCase: TestCase{
+				Name: "Valid license with 30 days left",
+				SetupServer: func(t *testing.T) *httptest.Server {
+					return httptest.NewServer(jsonResponse(t, http.StatusOK, validationResult(true, 30)))
+				},
+				ExpectedValid: true,
+				ExpectedDays:  30,
+			},
 		},
 		{
-			name:         "Client error - should panic",
-			statusCode:   http.StatusForbidden,
-			responseBody: map[string]string{"error": "Invalid license"},
-			expectValid:  false,
-			expectGrace:  false,
-			expectPanic:  true,
-			expectedDays: 0,
+			name: "Expired license in grace period",
+			setupMocks: func(l *helper.MockLogger) {
+				l.On("Infof", mock.Anything, mock.Anything).Maybe()
+				l.On("Warnf", "CRITICAL: Grace period ends in %d days - application will terminate. Contact support immediately to renew license", 5).Once()
+			},
+			expectError:   false,
+			expectedValid: false,
+			expectedDays:  5,
+			testCase: TestCase{
+				Name: "Expired license in grace period",
+				SetupServer: func(t *testing.T) *httptest.Server {
+					result := validationResult(false, 5)
+					result.ActiveGracePeriod = true
+					return httptest.NewServer(jsonResponse(t, http.StatusOK, result))
+				},
+				ExpectedValid: false,
+				ExpectedDays:  5,
+			},
 		},
 		{
-			name:         "Server error - should use grace period",
-			statusCode:   http.StatusInternalServerError,
-			responseBody: map[string]string{"error": "Server error"},
-			expectValid:  true,
-			expectGrace:  true,
-			expectPanic:  false,
-			expectedDays: 0,
+			name: "Invalid license",
+			setupMocks: func(l *helper.MockLogger) {
+				l.On("Infof", mock.Anything, mock.Anything).Maybe()
+				l.On("Debugf", "Client error during license validation - status: %d, code: %s, message: %s", 403, "INVALID_LICENSE", "invalid license").Once()
+				l.On("Errorf", "Exiting: license validation failed with client error: %s", "client error: 403").Once()
+			},
+			expectError: true,
+			testCase: TestCase{
+				Name: "Invalid license",
+				SetupServer: func(t *testing.T) *httptest.Server {
+					return httptest.NewServer(jsonResponse(t, http.StatusForbidden, map[string]any{
+						"code":    "INVALID_LICENSE",
+						"message": "invalid license",
+					}))
+				},
+				ExpectedValid: false,
+			},
+			expectedValid: false,
+		},
+		{
+			name: "Server error",
+			setupMocks: func(l *helper.MockLogger) {
+				l.On("Infof", mock.Anything, mock.Anything).Maybe()
+			},
+			testCase: TestCase{
+				Name: "Server error",
+				SetupServer: func(t *testing.T) *httptest.Server {
+					return httptest.NewServer(jsonResponse(t, http.StatusInternalServerError, map[string]any{
+						"code":    "INTERNAL_SERVER_ERROR",
+						"message": "internal server error",
+					}))
+				},
+				ExpectedValid: false,
+			},
+			expectError:   true,
+			expectedValid: false,
+		},
+		{
+			name: "Server error",
+			setupMocks: func(l *helper.MockLogger) {
+				l.On("Infof", mock.Anything, mock.Anything).Maybe()
+				l.On("Debugf", "Server error during license validation - status: %d, code: %s, message: %s", 500, "", "").Once()
+				l.On("Warnf", "License server error (5xx) detected, treating as valid - error: %s", "server error: 500").Once()
+			},
+			expectError:   false,
+			expectedValid: true, // When server error occurs, fallback to valid license with grace period
+			expectedDays:  0,
+			testCase: TestCase{
+				Name: "Server error",
+				SetupServer: func(t *testing.T) *httptest.Server {
+					return httptest.NewServer(jsonResponse(t, http.StatusInternalServerError, map[string]string{
+						"error": "server error",
+					}))
+				},
+				ExpectedValid: true,
+				ExpectedDays:  0,
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup test server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.statusCode)
-				json.NewEncoder(w).Encode(tt.responseBody)
-			}))
-			defer server.Close()
-
-			// Set environment variable to point to test server
-			t.Setenv("MIDAZ_LICENSE_URL", server.URL)
-
-			// Create gomock controller
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			// Create mock logger
-			mockLogger := log.NewMockLogger(ctrl)
-			
-			// Set logger expectations based on test case
-			if tt.statusCode >= 400 && tt.statusCode < 500 {
-				mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			// Create a mock logger
+			mockLogger := helper.NewMockLogger()
+			mockLoggerImpl := helper.AsMock(mockLogger)
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockLoggerImpl)
 			}
+
+			// Set up test server
+			ts := tt.testCase.SetupServer(t)
+			defer ts.Close()
+
+			// Create a custom HTTP client that points to our test server
+			httpClient := newTestClient(ts)
+
+			// Set required environment variables
+			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+			t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
+
+			// Set test server URL for license validation
+			middleware.SetTestLicenseBaseURL(ts.URL)
 			
-			// Allow any info, debug, and warn logs
-			mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+			// Create a new client with the mock logger and custom HTTP client
+			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, mockLogger)
+			// Override the HTTP client to use our test client
+			client.SetHTTPClient(httpClient)
 
-			// Uncomment when running the tests
-			// var logger log.Logger = mockLogger
-
-			// Create LicenseClient - skip test execution for now
-			// This is commented out since we need to manually test it
-			// to ensure we don't have test failures in CI
-			if tt.expectPanic {
-				t.Skip("Skipping test that would cause a panic")
+			if tt.expectError {
+				// For error cases, we expect a panic with a specific error message
+				assert.Panics(t, func() {
+					_, _ = client.Validate(context.Background())
+				}, "Expected panic for license validation error")
 			} else {
-				t.Skip("Integration test - run manually")
-			}
-
-			/* Uncomment to run integration tests
-			client := middleware.NewLicenseClient(
-				"test-app",
-				"test-key",
-				"test-org",
-				"dev",
-				&logger,
-			)
-
-			if tt.expectPanic {
-				defer func() {
-					r := recover()
-					assert.NotNil(t, r)
-				}()
-			}
-
-			result, err := client.Validate(context.Background())
-			
-			if !tt.expectPanic {
+				// For success cases, verify the validation result
+				result, err := client.Validate(context.Background())
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectValid, result.Valid)
-				assert.Equal(t, tt.expectGrace, result.ActiveGracePeriod)
-				assert.Equal(t, tt.expectedDays, result.ExpiryDaysLeft)
+
+				if tt.expectedValid {
+					assert.True(t, result.Valid)
+				} else {
+					assert.False(t, result.Valid)
+				}
+
+				if tt.expectedDays > 0 {
+					assert.Equal(t, tt.expectedDays, result.ExpiryDaysLeft)
+				}
 			}
-			*/
+
+			// Verify all expected mock calls were made
+			mockLoggerImpl.AssertExpectations(t)
+			
+			// Reset the test URL to prevent side effects between tests
+			middleware.ResetTestLicenseBaseURL()
 		})
 	}
+}
+
+// setupTestEnv sets up the required environment variables for testing
+func setupTestEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+	t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
+}
+
+// newTestClient returns a client with a custom transport for testing
+func newTestClient(server *httptest.Server) *http.Client {
+	transport := &http.Transport{
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			return url.Parse(server.URL)
+		},
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   5 * time.Second,
+	}
+}
+
+func TestLicenseClient_Integration(t *testing.T) {
+	// Skip this test in short mode
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	setupTestEnv(t)
+
+	// This is a basic integration test that can be expanded
+	// It requires the license server to be running
+	client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, nil)
+	// We don't assert on the result since it depends on the environment
+	// Just check that the function doesn't panic
+	assert.NotPanics(t, func() {
+		_, _ = client.Validate(context.Background())
+	})
 }

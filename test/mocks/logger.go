@@ -7,24 +7,24 @@ import (
 // Logger is a minimal mock implementation of the commons logger
 type Logger struct{}
 
-func (m *Logger) Infof(format string, args ...interface{})  {}
-func (m *Logger) Warnf(format string, args ...interface{})  {}
-func (m *Logger) Errorf(format string, args ...interface{}) {}
-func (m *Logger) Info(args ...interface{})                 {}
-func (m *Logger) Warn(args ...interface{})                 {}
-func (m *Logger) Error(args ...interface{})                {}
-func (m *Logger) Debug(args ...interface{})                {}
-func (m *Logger) Debugf(format string, args ...interface{}) {}
-func (m *Logger) Debugln(args ...interface{})              {}
-func (m *Logger) Errorln(args ...interface{})              {}
-func (m *Logger) Fatal(args ...interface{})                {}
-func (m *Logger) Fatalf(format string, args ...interface{}) {}
-func (m *Logger) Fatalln(args ...interface{})              {}
-func (m *Logger) Infoln(args ...interface{})               {}
-func (m *Logger) Warnln(args ...interface{})               {}
+func (m *Logger) Infof(format string, args ...any)                        {}
+func (m *Logger) Warnf(format string, args ...any)                        {}
+func (m *Logger) Errorf(format string, args ...any)                       {}
+func (m *Logger) Info(args ...any)                                        {}
+func (m *Logger) Warn(args ...any)                                        {}
+func (m *Logger) Error(args ...any)                                       {}
+func (m *Logger) Debug(args ...any)                                       {}
+func (m *Logger) Debugf(format string, args ...any)                       {}
+func (m *Logger) Debugln(args ...any)                                     {}
+func (m *Logger) Errorln(args ...any)                                     {}
+func (m *Logger) Fatal(args ...any)                                       {}
+func (m *Logger) Fatalf(format string, args ...any)                       {}
+func (m *Logger) Fatalln(args ...any)                                     {}
+func (m *Logger) Infoln(args ...any)                                      {}
+func (m *Logger) Warnln(args ...any)                                      {}
 func (m *Logger) WithDefaultMessageTemplate(tpl string) commonslog.Logger { return m }
-func (m *Logger) WithFields(fields ...any) commonslog.Logger { return m }
-func (m *Logger) Sync() error                             { return nil }
+func (m *Logger) WithFields(fields ...any) commonslog.Logger              { return m }
+func (m *Logger) Sync() error                                             { return nil }
 
 // NewLogger creates a new mock logger
 func NewLogger() *Logger {
