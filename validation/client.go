@@ -20,16 +20,16 @@ import (
 
 // Client handles license validation with caching and background refresh
 type Client struct {
-	config      *config.ClientConfig
-	apiClient   *api.Client
-	cacheManager *cache.Manager
-	refreshManager *refresh.Manager
+	config          *config.ClientConfig
+	apiClient       *api.Client
+	cacheManager    *cache.Manager
+	refreshManager  *refresh.Manager
 	shutdownManager *shutdown.Manager
-	logger      log.Logger
+	logger          log.Logger
 }
 
 // New creates a new license validation client
-func New(appID, licenseKey, orgID, env string, logger *log.Logger) (*Client, error) {
+func New(appID, licenseKey, orgID string, logger *log.Logger) (*Client, error) {
 	// Initialize logger
 	var l log.Logger
 	if logger != nil {
@@ -40,19 +40,18 @@ func New(appID, licenseKey, orgID, env string, logger *log.Logger) (*Client, err
 
 	// Create and validate config
 	cfg := &config.ClientConfig{
-		AppName:        appID,
-		LicenseKey:     licenseKey,
-		OrganizationID: orgID,
-		Environment:    env,
-		HTTPTimeout:    5 * time.Second,
-		RefreshInterval: 7 * 24 * time.Hour,
+		AppName:         appID,
+		LicenseKey:      licenseKey,
+		OrganizationID:  orgID,
+		HTTPTimeout:     cn.DefaultHTTPTimeoutSeconds * time.Second,
+		RefreshInterval: cn.DefaultRefreshIntervalDays * 24 * time.Hour,
 	}
-	
+
 	if err := cfg.Validate(); err != nil {
 		l.Errorf("Invalid configuration: %s", err.Error())
 		return nil, err
 	}
-	
+
 	// Generate fingerprint
 	cfg.GenerateFingerprint()
 
@@ -67,26 +66,26 @@ func New(appID, licenseKey, orgID, env string, logger *log.Logger) (*Client, err
 	httpClient := &http.Client{
 		Timeout: cfg.HTTPTimeout,
 	}
-	
+
 	// Create API client
 	apiClient := api.New(cfg, httpClient, l)
-	
+
 	// Create shutdown manager
 	shutdownManager := shutdown.New()
-	
+
 	// Create client
 	client := &Client{
-		config:      cfg,
-		apiClient:   apiClient,
-		cacheManager: cacheManager,
+		config:          cfg,
+		apiClient:       apiClient,
+		cacheManager:    cacheManager,
 		shutdownManager: shutdownManager,
-		logger:      l,
+		logger:          l,
 	}
-	
+
 	// Create and set up refresh manager
 	refreshManager := refresh.New(client, cfg.RefreshInterval, l)
 	client.refreshManager = refreshManager
-	
+
 	return client, nil
 }
 
@@ -106,7 +105,7 @@ func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 	if result, found := c.cacheManager.Get(c.config.Fingerprint); found {
 		return result, nil
 	}
-	
+
 	// Perform validation
 	return c.validateAndHandle(ctx)
 }
@@ -118,7 +117,7 @@ func (c *Client) validateAndHandle(ctx context.Context) (model.ValidationResult,
 	if err != nil {
 		return c.handleAPIError(err)
 	}
-	
+
 	// Check if license is valid
 	if !res.Valid && !res.ActiveGracePeriod {
 		c.logger.Errorf("Invalid license: neither active license nor grace period detected")
@@ -126,13 +125,13 @@ func (c *Client) validateAndHandle(ctx context.Context) (model.ValidationResult,
 		// Terminate the application
 		c.shutdownManager.Terminate("Invalid license state - no active license or grace period")
 	}
-	
-	// License is valid or in grace period - process and log
-	c.processValidResult(res)
-	
+
+	// License is valid or in grace period - log and cache
+	c.logValidResult(res)
+
 	// Cache the result
 	c.cacheManager.Store(c.config.Fingerprint, res)
-	
+
 	return res, nil
 }
 
@@ -143,12 +142,12 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 		// Server errors (5xx) are treated as temporary and we fall back to cached value
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			c.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
-			
+
 			// Use cached result if available
 			if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
 				return *cachedResult, nil
 			}
-			
+
 			// No cached result, return a temporary valid license
 			return model.ValidationResult{
 				Valid:             true,
@@ -156,17 +155,17 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 				ActiveGracePeriod: true,
 			}, nil
 		}
-		
+
 		// Client errors (4xx) are fatal - license is invalid
 		if apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
 			c.refreshManager.Shutdown()
-			
+
 			// Terminate the application
 			c.shutdownManager.Terminate("License validation failed with client error: " + apiErr.Error())
 		}
 	}
-	
+
 	// Handle connection errors by using the cached result if available
 	if libErr.IsConnectionError(err) {
 		if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
@@ -174,28 +173,28 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 			return *cachedResult, nil
 		}
 	}
-	
+
 	// For any other errors, just return the error
 	return model.ValidationResult{}, fmt.Errorf("failed to validate license: %w", err)
 }
 
-// processValidResult handles a valid license response
-func (c *Client) processValidResult(res model.ValidationResult) {
+// logValidResult handles a valid license response
+func (c *Client) logValidResult(res model.ValidationResult) {
 	// Log based on license state
 	if res.Valid {
-		if res.ExpiryDaysLeft <= 7 {
+		if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToUrgentWarn {
 			// License valid and within 7 days of expiration - urgent warning
 			c.logger.Warnf("WARNING: License expires in %d days. Contact your account manager to renew", res.ExpiryDaysLeft)
-		} else if res.ExpiryDaysLeft <= 30 {
+		} else if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToNormalWarn {
 			// License valid but approaching expiration - normal warning
 			c.logger.Warnf("License expires in %d days", res.ExpiryDaysLeft)
 		}
 		return
 	}
-	
+
 	// License is in grace period
 	if res.ActiveGracePeriod {
-		if res.ExpiryDaysLeft <= 7 {
+		if res.ExpiryDaysLeft <= cn.DefaultGraceExpiryDaysToCriticalWarn {
 			// Grace period is about to expire
 			c.logger.Warnf("CRITICAL: Grace period ends in %d days - application will terminate. Contact support immediately to renew license", res.ExpiryDaysLeft)
 		} else {
@@ -225,23 +224,23 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 	// Simple retry mechanism for background validation
 	maxRetries := 3
 	backoff := 5 * time.Second
-	
+
 	var lastErr error
 	for i := 0; i < maxRetries; i++ {
 		_, err := c.validateAndHandle(ctx)
 		if err == nil {
 			return nil
 		}
-		
+
 		lastErr = err
 		c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
-		
+
 		// Wait before retrying, unless this is the last attempt
 		if i < maxRetries-1 {
 			time.Sleep(backoff)
 			backoff *= 2 // Exponential backoff
 		}
 	}
-	
+
 	return lastErr
 }

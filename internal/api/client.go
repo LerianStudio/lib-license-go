@@ -50,17 +50,13 @@ var baseURL = cn.DefaultLicenseGatewayBaseURL
 
 // ValidateLicense performs the license validation API call
 func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, error) {
-	if c.config.Environment == "" {
-		return model.ValidationResult{}, fmt.Errorf("environment is not set")
-	}
+	url := fmt.Sprintf("%s/licenses/validate", baseURL)
 
-	url := fmt.Sprintf("%s/%s/licenses/validate", baseURL, c.config.Environment)
-	
 	reqBody := map[string]string{
 		"licenseKey":  c.config.LicenseKey,
 		"fingerprint": c.config.Fingerprint,
 	}
-	
+
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return model.ValidationResult{}, fmt.Errorf("failed to marshal request body: %w", err)
@@ -72,7 +68,7 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 	}
 	// Set required headers
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Add organization ID as API key in header
 	if c.config.OrganizationID != "" {
 		req.Header.Set("x-api-key", c.config.OrganizationID)
@@ -111,12 +107,12 @@ func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResul
 			resp.StatusCode, errorResp.Code, errorResp.Message)
 		return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 	}
-	
+
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		apiErr := &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
 		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
-		
+
 		return model.ValidationResult{}, apiErr
 	}
 

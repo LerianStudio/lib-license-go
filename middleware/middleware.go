@@ -19,8 +19,8 @@ type LicenseClient struct {
 }
 
 // NewLicenseClient creates a new license client with middleware capabilities
-func NewLicenseClient(appID, licenseKey, orgID, env string, logger *log.Logger) *LicenseClient {
-	validator, err := validation.New(appID, licenseKey, orgID, env, logger)
+func NewLicenseClient(appID, licenseKey, orgID string, logger *log.Logger) *LicenseClient {
+	validator, err := validation.New(appID, licenseKey, orgID, logger)
 	if err != nil {
 		// If we can't create the validator, we'll return a nil client
 		// This will be caught by the middleware and will bypass validation
@@ -54,7 +54,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 			c.logger.Errorf("Initial license validation failed: %v", err)
 			// Error will trigger termination through the termination handler
 		} else {
-			c.logger.Info("License validation successful, starting background refresh")
+			c.logger.Info("License validated successfully")
 			// Start background refresh if validation succeeded
 			go c.validator.StartBackgroundRefresh(backgroundCtx)
 		}

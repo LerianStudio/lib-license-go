@@ -146,7 +146,7 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 			}
 
 			// Create a new client with the mock logger and required parameters
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, logger)
+			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, logger)
 
 			if tc.ExpectedPanic {
 				assert.Panics(t, func() {
