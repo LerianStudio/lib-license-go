@@ -11,8 +11,7 @@ import (
 
 // ClientConfig holds the configuration for the license client
 type ClientConfig struct {
-	// Application identification
-	AppID          string
+	AppName        string // Application name (e.g., "plugin-fees")
 	LicenseKey     string
 	OrganizationID string
 	Environment    string
@@ -35,8 +34,8 @@ func NewDefaultConfig() ClientConfig {
 
 // Validate checks if the configuration is valid
 func (c *ClientConfig) Validate() error {
-	if c.AppID == "" {
-		return errors.New("application ID is required")
+	if c.AppName == "" {
+		return errors.New("application name is required")
 	}
 	if c.LicenseKey == "" {
 		return errors.New("license key is required")
@@ -49,7 +48,7 @@ func (c *ClientConfig) Validate() error {
 
 // GenerateFingerprint creates a unique fingerprint for this license
 func (c *ClientConfig) GenerateFingerprint() {
-	fp := c.AppID + ":"
+	fp := c.AppName + ":"
 
 	if c.OrganizationID != "" {
 		fp = fp + commons.HashSHA256(c.LicenseKey+":"+c.OrganizationID)
@@ -62,12 +61,9 @@ func (c *ClientConfig) GenerateFingerprint() {
 
 // FromModel converts a model.Config to a ClientConfig
 func FromModel(cfg model.Config, logger log.Logger) (*ClientConfig, error) {
-	if err := validateModelConfig(&cfg, logger); err != nil {
-		return nil, err
-	}
-
+	// Convert model.Config to ClientConfig
 	config := &ClientConfig{
-		AppID:           cfg.ApplicationName,
+		AppName:         cfg.ApplicationName,
 		LicenseKey:      cfg.LicenseKey,
 		OrganizationID:  cfg.OrganizationID,
 		Environment:     cfg.PluginEnvironment,
@@ -75,20 +71,11 @@ func FromModel(cfg model.Config, logger log.Logger) (*ClientConfig, error) {
 		RefreshInterval: 7 * 24 * time.Hour,
 	}
 
+	// Validate the converted config
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
 	config.GenerateFingerprint()
 	return config, nil
-}
-
-// validateModelConfig validates the model.Config
-func validateModelConfig(cfg *model.Config, logger log.Logger) error {
-	if cfg.ApplicationName == "" {
-		return errors.New("application name is required")
-	}
-	if cfg.LicenseKey == "" {
-		return errors.New("license key is required")
-	}
-	if cfg.PluginEnvironment == "" {
-		return errors.New("environment is required")
-	}
-	return nil
 }

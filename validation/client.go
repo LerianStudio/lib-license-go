@@ -40,7 +40,7 @@ func New(appID, licenseKey, orgID, env string, logger *log.Logger) (*Client, err
 
 	// Create and validate config
 	cfg := &config.ClientConfig{
-		AppID:          appID,
+		AppName:        appID,
 		LicenseKey:     licenseKey,
 		OrganizationID: orgID,
 		Environment:    env,
