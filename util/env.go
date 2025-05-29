@@ -37,13 +37,5 @@ func ValidateEnvVariables(cfg *model.Config, l log.Logger) error {
 		return errors.New(err)
 	}
 
-	if commons.IsNilOrEmpty(&cfg.PluginEnvironment) {
-		err := "missing plugin environment variable"
-
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
 	return nil
 }
