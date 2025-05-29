@@ -8,4 +8,5 @@ const (
 	DefaultMinExpiryDaysToNormalWarn     = 30
 	DefaultMinExpiryDaysToUrgentWarn     = 7
 	DefaultGraceExpiryDaysToCriticalWarn = 7
+	DefaultTrialExpiryDaysToWarn         = 2
 )

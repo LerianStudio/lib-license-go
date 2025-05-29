@@ -180,7 +180,19 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 
 // logValidResult handles a valid license response
 func (c *Client) logValidResult(res model.ValidationResult) {
-	// Log based on license state
+	// Handle trial license
+	if res.IsTrial {
+		if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
+			// Trial license is about to expire soon
+			c.logger.Warnf("TRIAL LICENSE: Your trial expires in %d days. Please upgrade to a full license to continue using the application", res.ExpiryDaysLeft)
+		} else {
+			// General trial notice
+			c.logger.Infof("You are using a trial license that expires in %d days", res.ExpiryDaysLeft)
+		}
+		return
+	}
+
+	// Log based on license state for non-trial licenses
 	if res.Valid {
 		if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToUrgentWarn {
 			// License valid and within 7 days of expiration - urgent warning
@@ -189,7 +201,6 @@ func (c *Client) logValidResult(res model.ValidationResult) {
 			// License valid but approaching expiration - normal warning
 			c.logger.Warnf("License expires in %d days", res.ExpiryDaysLeft)
 		}
-		return
 	}
 
 	// License is in grace period
@@ -198,8 +209,8 @@ func (c *Client) logValidResult(res model.ValidationResult) {
 			// Grace period is about to expire
 			c.logger.Warnf("CRITICAL: Grace period ends in %d days - application will terminate. Contact support immediately to renew license", res.ExpiryDaysLeft)
 		} else {
-			// License just expired, but is in grace period
-			c.logger.Warnf("License expired! Running in grace period (%d days remaining)", res.ExpiryDaysLeft)
+			// General grace period warning
+			c.logger.Warnf("WARNING: License has expired but grace period is active for %d more days", res.ExpiryDaysLeft)
 		}
 	}
 }
