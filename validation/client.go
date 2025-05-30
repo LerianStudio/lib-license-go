@@ -124,7 +124,7 @@ func (c *Client) validateAndHandle(ctx context.Context) (model.ValidationResult,
 		c.refreshManager.Shutdown()
 
 		if res.IsTrial {
-			c.shutdownManager.Terminate("Trial period has expired. Please purchase a subscription to continue using the application.")
+			c.shutdownManager.Terminate("Thank you for trying our application. Your trial period has now ended. Please purchase a subscription to continue enjoying our services.")
 		} else {
 			c.logger.Errorf("Invalid license: neither active license nor grace period detected")
 			c.shutdownManager.Terminate("Invalid license state - no active license or grace period")
