@@ -116,7 +116,6 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 		testAppID      = "test-app"
 		testLicenseKey = "test-key"
 		testOrgID      = "test-org"
-		testEnv        = "test-env"
 	)
 
 	for _, tc := range testCases {
@@ -127,7 +126,6 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 
 			// Set the required environment variables
 			t.Setenv("MIDAZ_LICENSE_URL", ts.URL)
-			t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
 			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
 
 			// Create a mock logger
@@ -146,7 +144,7 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 			}
 
 			// Create a new client with the mock logger and required parameters
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, logger)
+			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, logger)
 
 			if tc.ExpectedPanic {
 				assert.Panics(t, func() {

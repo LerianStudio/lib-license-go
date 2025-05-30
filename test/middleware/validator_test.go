@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LerianStudio/lib-license-go/internal/api"
 	"github.com/LerianStudio/lib-license-go/middleware"
 	"github.com/LerianStudio/lib-license-go/test/helper"
 	"github.com/stretchr/testify/assert"
@@ -20,9 +21,7 @@ const (
 	testAppID      = "test-app"
 	testLicenseKey = "test-key"
 	testOrgID      = "test-org"
-	testEnv        = "test-env"
 )
-
 
 func TestLicenseValidation(t *testing.T) {
 	setupTestEnv(t)
@@ -152,13 +151,12 @@ func TestLicenseValidation(t *testing.T) {
 
 			// Set required environment variables
 			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
-			t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
 
 			// Set test server URL for license validation
-			middleware.SetTestLicenseBaseURL(ts.URL)
-			
+			api.SetTestLicenseBaseURL(ts.URL)
+
 			// Create a new client with the mock logger and custom HTTP client
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, mockLogger)
+			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, mockLogger)
 			// Override the HTTP client to use our test client
 			client.SetHTTPClient(httpClient)
 
@@ -185,9 +183,9 @@ func TestLicenseValidation(t *testing.T) {
 
 			// Verify all expected mock calls were made
 			mockLoggerImpl.AssertExpectations(t)
-			
+
 			// Reset the test URL to prevent side effects between tests
-			middleware.ResetTestLicenseBaseURL()
+			api.ResetTestLicenseBaseURL()
 		})
 	}
 }
@@ -196,7 +194,6 @@ func TestLicenseValidation(t *testing.T) {
 func setupTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
-	t.Setenv("PLUGIN_ENVIRONMENT", testEnv)
 }
 
 // newTestClient returns a client with a custom transport for testing
@@ -221,12 +218,35 @@ func TestLicenseClient_Integration(t *testing.T) {
 
 	setupTestEnv(t)
 
-	// This is a basic integration test that can be expanded
-	// It requires the license server to be running
-	client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, testEnv, nil)
-	// We don't assert on the result since it depends on the environment
+	// Create a mock server that returns a valid response
+	ts := httptest.NewServer(jsonResponse(t, http.StatusOK, validationResult(true, 30)))
+	defer ts.Close()
+
+	// Set test server URL for license validation
+	api.SetTestLicenseBaseURL(ts.URL)
+	
+	// Create a custom HTTP client that points to our test server
+	httpClient := newTestClient(ts)
+
+	// Create a new client with mock logger
+	mockLogger := helper.NewMockLogger()
+	mockLoggerImpl := helper.AsMock(mockLogger)
+	// Set up expected logger calls
+	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything).Maybe()
+	mockLoggerImpl.On("Warnf", "License expires in %d days", 30).Once()
+	
+	client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, mockLogger)
+	// Override the HTTP client to use our test client
+	client.SetHTTPClient(httpClient)
+
 	// Just check that the function doesn't panic
 	assert.NotPanics(t, func() {
-		_, _ = client.Validate(context.Background())
+		result, err := client.Validate(context.Background())
+		assert.NoError(t, err)
+		assert.True(t, result.Valid)
+		assert.Equal(t, 30, result.ExpiryDaysLeft)
 	})
+
+	// Reset the test URL to prevent side effects between tests
+	api.ResetTestLicenseBaseURL()
 }
