@@ -9,4 +9,5 @@ const (
 	DefaultMinExpiryDaysToUrgentWarn     = 7
 	DefaultGraceExpiryDaysToCriticalWarn = 7
 	DefaultTrialExpiryDaysToWarn         = 2
+	DefaultLicenseExpiredDays            = 0
 )

@@ -182,12 +182,18 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 func (c *Client) logValidResult(res model.ValidationResult) {
 	// Handle trial license
 	if res.IsTrial {
-		if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
+		messagePrefix := "TRIAL LICENSE"
+		messageSuffix := "Please upgrade to a full license to continue using the application"
+
+		if res.ExpiryDaysLeft == cn.DefaultLicenseExpiredDays {
+			// Trial license expires today
+			c.logger.Warnf("%s: Your trial expires today. %s", messagePrefix, messageSuffix)
+		} else if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
 			// Trial license is about to expire soon
-			c.logger.Warnf("TRIAL LICENSE: Your trial expires in %d days. Please upgrade to a full license to continue using the application", res.ExpiryDaysLeft)
+			c.logger.Warnf("%s: Your trial expires in %d days. %s", messagePrefix, res.ExpiryDaysLeft, messageSuffix)
 		} else {
 			// General trial notice
-			c.logger.Infof("You are using a trial license that expires in %d days", res.ExpiryDaysLeft)
+			c.logger.Infof("%s: You are using a trial license that expires in %d days", messagePrefix, res.ExpiryDaysLeft)
 		}
 		return
 	}
