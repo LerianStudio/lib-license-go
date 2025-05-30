@@ -112,25 +112,24 @@ func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 
 // validateAndHandle performs the validation and handles all error cases
 func (c *Client) validateAndHandle(ctx context.Context) (model.ValidationResult, error) {
-	// Call the license API
 	res, err := c.apiClient.ValidateLicense(ctx)
 	if err != nil {
 		return c.handleAPIError(err)
 	}
 
-	// Check if license is valid
-	if !res.Valid && !res.ActiveGracePeriod {
-		c.logger.Errorf("Invalid license: neither active license nor grace period detected")
-		c.refreshManager.Shutdown()
-		// Terminate the application
-		c.shutdownManager.Terminate("Invalid license state - no active license or grace period")
-	}
-
-	// License is valid or in grace period - log and cache
 	c.logValidResult(res)
-
-	// Cache the result
 	c.cacheManager.Store(c.config.Fingerprint, res)
+
+	if !res.Valid && !res.ActiveGracePeriod {
+		c.refreshManager.Shutdown()
+
+		if res.IsTrial {
+			c.shutdownManager.Terminate("Trial period has expired. Please purchase a subscription to continue using the application.")
+		} else {
+			c.logger.Errorf("Invalid license: neither active license nor grace period detected")
+			c.shutdownManager.Terminate("Invalid license state - no active license or grace period")
+		}
+	}
 
 	return res, nil
 }
@@ -180,26 +179,28 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 
 // logValidResult handles a valid license response
 func (c *Client) logValidResult(res model.ValidationResult) {
-	// Handle trial license
-	if res.IsTrial {
-		messagePrefix := "TRIAL LICENSE"
-		messageSuffix := "Please upgrade to a full license to continue using the application"
-
-		if res.ExpiryDaysLeft == cn.DefaultLicenseExpiredDays {
-			// Trial license expires today
-			c.logger.Warnf("%s: Your trial expires today. %s", messagePrefix, messageSuffix)
-		} else if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
-			// Trial license is about to expire soon
-			c.logger.Warnf("%s: Your trial expires in %d days. %s", messagePrefix, res.ExpiryDaysLeft, messageSuffix)
-		} else {
-			// General trial notice
-			c.logger.Infof("%s: You are using a trial license that expires in %d days", messagePrefix, res.ExpiryDaysLeft)
-		}
-		return
-	}
-
-	// Log based on license state for non-trial licenses
 	if res.Valid {
+		// Handle trial license
+		if res.IsTrial {
+			messagePrefix := "TRIAL LICENSE"
+			messageSuffix := "Please upgrade to a full license to continue using the application"
+
+			// Handle active trial license
+			if res.ExpiryDaysLeft == cn.DefaultLicenseExpiredDays {
+				// Trial license expires today
+				c.logger.Warnf("%s: Your trial expires today. %s", messagePrefix, messageSuffix)
+			} else if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
+				// Trial license is about to expire soon
+				c.logger.Warnf("%s: Your trial expires in %d days. %s", messagePrefix, res.ExpiryDaysLeft, messageSuffix)
+			} else {
+				// General trial notice
+				c.logger.Infof("%s: You are using a trial license that expires in %d days", messagePrefix, res.ExpiryDaysLeft)
+			}
+			return
+		}
+
+		// Log based on license state for non-trial licenses
+
 		if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToUrgentWarn {
 			// License valid and within 7 days of expiration - urgent warning
 			c.logger.Warnf("WARNING: License expires in %d days. Contact your account manager to renew", res.ExpiryDaysLeft)
