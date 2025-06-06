@@ -57,6 +57,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 		if c.validator.IsGlobal {
 			return c.handleGlobalPluginRequest(ctx)
 		}
+
 		return c.handleOrgSpecificPluginRequest(ctx)
 	}
 }
@@ -72,10 +73,12 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 		l.Errorf("Global license validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed)
 		panic(fmt.Sprintf("%s: %v", constant.ErrGlobalLicenseValidationFailed, err))
 	}
+
 	if !result.Valid && !result.ActiveGracePeriod && !result.IsTrial {
 		l.Errorf("Global license is invalid (code %s)", constant.ErrGlobalLicenseInvalid)
 		panic(constant.ErrGlobalLicenseInvalid)
 	}
+
 	c.logLicenseStatus(result, constant.GlobalPluginValue)
 }
 
@@ -86,11 +89,14 @@ func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context
 
 	l.Info("Validating organization-specific licenses")
 	orgIDs := c.validator.GetOrganizationIDs()
+
 	if len(orgIDs) == 0 {
 		l.Errorf("No organization IDs configured (code %s)", constant.ErrNoOrganizationIDs)
 		panic(constant.ErrNoOrganizationIDs)
 	}
+
 	validFound := false
+
 	for _, orgID := range orgIDs {
 		res, err := c.validator.ValidateWithOrgID(ctx, orgID)
 		if err != nil {
@@ -99,11 +105,13 @@ func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context
 		}
 		if res.Valid || res.ActiveGracePeriod || res.IsTrial {
 			validFound = true
+
 			c.logLicenseStatus(res, orgID)
 		} else {
 			l.Warnf("Invalid license for org %s", orgID)
 		}
 	}
+
 	if !validFound {
 		l.Errorf("No valid licenses found (code %s)", constant.ErrNoValidLicenses)
 		panic(constant.ErrNoValidLicenses)
@@ -123,8 +131,10 @@ func (c *LicenseClient) handleGlobalPluginRequest(ctx *fiber.Ctx) error {
 			"message": "Global plugin license validation failed",
 		})
 	}
+
 	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
 		l.Warnf("Global license invalid (code %s)", constant.ErrRequestGlobalLicenseInvalid)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrRequestGlobalLicenseInvalid,
 			"title":   "Invalid License",

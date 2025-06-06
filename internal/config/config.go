@@ -22,5 +22,6 @@ func (c *ClientConfig) Validate() error {
 	if len(c.OrganizationIDs) == 0 {
 		return errors.New("at least one organization ID is required")
 	}
+
 	return nil
 }

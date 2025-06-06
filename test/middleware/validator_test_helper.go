@@ -113,6 +113,7 @@ type TestCase struct {
 
 // RunTestCases executes a list of test cases for license validation
 func RunTestCases(t *testing.T, testCases []TestCase) {
+	t.Helper()
 	const (
 		testAppID      = "test-app"
 		testLicenseKey = "test-key"
@@ -174,21 +175,22 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 	}
 }
 
-// jsonResponse creates an HTTP handler that responds with the given status code and JSON body
-func jsonResponse(t *testing.T, statusCode int, body any) http.HandlerFunc {
+// JSONResponse creates an HTTP handler that responds with the given status code and JSON body
+func JSONResponse(t *testing.T, statusCode int, body any) http.HandlerFunc {
 	t.Helper()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		if body != nil {
-			json.NewEncoder(w).Encode(body)
+			err := json.NewEncoder(w).Encode(body)
+			require.NoError(t, err)
 		}
 	}
 }
 
-// validationResult creates a validation result for testing
-func validationResult(valid bool, daysLeft int) *model.ValidationResult {
+// ValidationResult creates a validation result for testing
+func ValidationResult(valid bool, daysLeft int) *model.ValidationResult {
 	return &model.ValidationResult{
 		Valid:          valid,
 		ExpiryDaysLeft: daysLeft,
