@@ -17,8 +17,8 @@ In your environment configuration or `.env` file, set the following environment 
 
 ```dotenv
 APPLICATION_NAME=your-application-name
-LICENSE_KEY=your-plugin-license-key
-MIDAZ_ORGANIZATION_ID=your-organization-id
+MIDAZ_LICENSE_KEY=your-plugin-license-key
+MIDAZ_ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
 
 ### 2. Create a new instance of the middleware:
@@ -30,8 +30,8 @@ import libLicense "github.com/LerianStudio/lib-license-go/middleware"
 
 type Config struct {
     ApplicationName        string   `env:"APPLICATION_NAME"`
-    LicenseKey             string   `env:"LICENSE_KEY"`
-    MidazOrganizationID    string   `env:"MIDAZ_ORGANIZATION_ID"`
+    LicenseKey             string   `env:"MIDAZ_LICENSE_KEY"`
+    MidazOrganizationIDs   string   `env:"MIDAZ_ORGANIZATION_IDS"`
 }
 
 func InitServers() *Service {

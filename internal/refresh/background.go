@@ -9,6 +9,8 @@ import (
 )
 
 // Validator defines the interface for license validation
+// When using multiple organization IDs, the implementation should validate all organizations
+// and return success if any of them has a valid license
 type Validator interface {
 	ValidateWithRetry(ctx context.Context) error
 }

@@ -1,8 +1,16 @@
 package constant
 
-// Fixed license validation API URL
+// License URL constants
 const (
-	DefaultLicenseGatewayBaseURL         = "https://license.dev.midaz.io"
+	ProdLicenseGatewayBaseURL = "https://license.lerian.io"
+	DevLicenseGatewayBaseURL  = "https://license.dev.lerian.io"
+)
+
+// OrganizationIDHeader defines the header name for organization ID in requests
+const OrganizationIDHeader = "X-Organization-ID"
+
+// Default values and thresholds
+const (
 	DefaultHTTPTimeoutSeconds            = 5
 	DefaultRefreshIntervalDays           = 7
 	DefaultMinExpiryDaysToNormalWarn     = 30

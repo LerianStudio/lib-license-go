@@ -3,21 +3,14 @@ package config
 import (
 	"errors"
 	"time"
-
-	"github.com/LerianStudio/lib-commons/commons"
 )
 
-// ClientConfig holds the configuration for the license client
+// ClientConfig contains the configuration for the license client
 type ClientConfig struct {
-	AppName        string // Application name (e.g., "plugin-fees")
-	LicenseKey     string
-	OrganizationID string
-	Fingerprint    string
-
-	// HTTP configuration
-	HTTPTimeout time.Duration
-
-	// Background refresh configuration
+	AppName         string
+	LicenseKey      string   // License key for API validation
+	OrganizationIDs []string // List of valid organization IDs
+	HTTPTimeout     time.Duration
 	RefreshInterval time.Duration
 }
 
@@ -26,24 +19,8 @@ func (c *ClientConfig) Validate() error {
 	if c.AppName == "" {
 		return errors.New("application name is required")
 	}
-	if c.LicenseKey == "" {
-		return errors.New("license key is required")
-	}
-	if c.OrganizationID == "" {
-		return errors.New("organization ID is required")
+	if len(c.OrganizationIDs) == 0 {
+		return errors.New("at least one organization ID is required")
 	}
 	return nil
-}
-
-// GenerateFingerprint creates a unique fingerprint for this license
-func (c *ClientConfig) GenerateFingerprint() {
-	fp := c.AppName + ":"
-
-	if c.OrganizationID != "" {
-		fp = fp + commons.HashSHA256(c.LicenseKey+":"+c.OrganizationID)
-	} else {
-		fp = fp + commons.HashSHA256(c.LicenseKey)
-	}
-
-	c.Fingerprint = fp
 }
