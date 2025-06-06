@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/LerianStudio/lib-commons/commons/log"
+	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/middleware"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/test/helper"
@@ -112,6 +113,8 @@ type TestCase struct {
 
 // RunTestCases executes a list of test cases for license validation
 func RunTestCases(t *testing.T, testCases []TestCase) {
+	t.Helper()
+
 	const (
 		testAppID      = "test-app"
 		testLicenseKey = "test-key"
@@ -126,7 +129,7 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 
 			// Set the required environment variables
 			t.Setenv("MIDAZ_LICENSE_URL", ts.URL)
-			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+			t.Setenv(cn.EnvOrganizationIDs, testOrgID)
 
 			// Create a mock logger
 			logger := helper.NewMockLogger()
@@ -136,15 +139,25 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 			if tc.ExpectedErrorLogs > 0 {
 				mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything).Return()
 			}
+
 			if tc.ExpectedWarnLogs > 0 {
 				mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Return()
 			}
+
 			if tc.ExpectedValid {
 				mockLogger.On("Info", "License validation successful").Return()
 			}
 
+			// Support updated log formats for cache operations
+			mockLogger.On("Infof", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return()
+			mockLogger.On("Debugf", mock.AnythingOfType("string"), mock.AnythingOfType("string"),
+				mock.AnythingOfType("bool"), mock.AnythingOfType("int"), mock.AnythingOfType("bool"),
+				mock.AnythingOfType("bool")).Return()
+
 			// Create a new client with the mock logger and required parameters
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, logger)
+			// Add test license key
+			testLicenseKey := "test-license-key"
+			client := middleware.NewLicenseClient(testAppID, testOrgID, testLicenseKey, logger)
 
 			if tc.ExpectedPanic {
 				assert.Panics(t, func() {
@@ -165,21 +178,23 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 	}
 }
 
-// jsonResponse creates an HTTP handler that responds with the given status code and JSON body
-func jsonResponse(t *testing.T, statusCode int, body any) http.HandlerFunc {
+// JSONResponse creates an HTTP handler that responds with the given status code and JSON body
+func JSONResponse(t *testing.T, statusCode int, body any) http.HandlerFunc {
 	t.Helper()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
+
 		if body != nil {
-			json.NewEncoder(w).Encode(body)
+			err := json.NewEncoder(w).Encode(body)
+			require.NoError(t, err)
 		}
 	}
 }
 
-// validationResult creates a validation result for testing
-func validationResult(valid bool, daysLeft int) *model.ValidationResult {
+// ValidationResult creates a validation result for testing
+func ValidationResult(valid bool, daysLeft int) *model.ValidationResult {
 	return &model.ValidationResult{
 		Valid:          valid,
 		ExpiryDaysLeft: daysLeft,

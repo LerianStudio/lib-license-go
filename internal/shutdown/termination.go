@@ -30,7 +30,7 @@ func (m *Manager) SetHandler(handler Handler) {
 	if handler == nil {
 		return
 	}
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handler = handler
@@ -42,6 +42,6 @@ func (m *Manager) Terminate(reason string) {
 	m.mu.RLock()
 	handler := m.handler
 	m.mu.RUnlock()
-	
+
 	handler(reason)
 }

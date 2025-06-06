@@ -1,4 +1,5 @@
-package error
+// Package liberr provides error-related utilities for license validation
+package liberr
 
 import (
 	"errors"
@@ -6,14 +7,13 @@ import (
 	"strings"
 )
 
-// ApiError is a custom error type to propagate HTTP status codes
-// for strict error handling in Validate.
-type ApiError struct {
+// APIError propagates HTTP status codes for strict error handling in Validate.
+type APIError struct {
 	StatusCode int
 	Msg        string
 }
 
-func (e *ApiError) Error() string {
+func (e *APIError) Error() string {
 	return e.Msg
 }
 
