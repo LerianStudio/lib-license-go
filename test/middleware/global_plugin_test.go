@@ -38,11 +38,11 @@ func TestGlobalPluginMode(t *testing.T) {
 		// Return valid license response
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"valid":           true,
-			"expiry_date":     time.Now().AddDate(0, 0, 30).Format("2006-01-02"),
+			"valid":            true,
+			"expiry_date":      time.Now().AddDate(0, 0, 30).Format("2006-01-02"),
 			"expiry_days_left": 30,
-			"is_trial":        false,
-			"grace_period":    false,
+			"is_trial":         false,
+			"grace_period":     false,
 		})
 	}))
 	defer ts.Close()
@@ -57,23 +57,23 @@ func TestGlobalPluginMode(t *testing.T) {
 	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything).Maybe()
 	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLoggerImpl.On("Debug", mock.Anything).Maybe()
-	mockLoggerImpl.On("Debugf", mock.Anything, mock.Anything).Maybe()
-	mockLoggerImpl.On("Debugf", mock.Anything, mock.Anything, mock.Anything).Maybe()
-	
+	// Setup common mock expectations
+	setupCommonMockExpectations(mockLoggerImpl)
+
 	t.Run("Valid Global License - Successful Initialization", func(t *testing.T) {
 		// Create a license client with global plugin mode
 		assert.NotPanics(t, func() {
 			client := middleware.NewLicenseClient(
-				"test-app", 
-				cn.GlobalPluginValue, 
-				"test-license-key", 
+				"test-app",
+				cn.GlobalPluginValue,
+				"test-license-key",
 				mockLogger,
 			)
 
 			// Create a custom HTTP client that points to our test server
 			httpClient := newTestClient(ts)
 			client.SetHTTPClient(httpClient)
-			
+
 			// Create middleware - this triggers initial validation
 			_ = client.Middleware()
 		})
@@ -82,30 +82,30 @@ func TestGlobalPluginMode(t *testing.T) {
 	t.Run("Global Plugin - Request Handling", func(t *testing.T) {
 		// Create a license client with global plugin mode
 		client := middleware.NewLicenseClient(
-			"test-app", 
-			cn.GlobalPluginValue, 
-			"test-license-key", 
+			"test-app",
+			cn.GlobalPluginValue,
+			"test-license-key",
 			mockLogger,
 		)
-		
+
 		// Create a custom HTTP client that points to our test server
 		httpClient := newTestClient(ts)
 		client.SetHTTPClient(httpClient)
-		
+
 		// Create the middleware handler
 		middlewareHandler := client.Middleware()
-		
+
 		// Create Fiber app with middleware
 		app := fiber.New()
 		app.Use(middlewareHandler)
 		app.Get("/test", func(c *fiber.Ctx) error {
 			return c.SendString("success")
 		})
-		
+
 		// Test a request without organization header (should pass in global mode)
 		req := httptest.NewRequest("GET", "/test", nil)
 		resp, err := app.Test(req)
-		
+
 		// Should succeed even without organization header
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)

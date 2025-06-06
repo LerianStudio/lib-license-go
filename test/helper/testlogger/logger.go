@@ -151,6 +151,7 @@ func (l *TestLogger) GetEntries() []LogEntry {
 
 	entries := make([]LogEntry, len(l.entries))
 	copy(entries, l.entries)
+
 	return entries
 }
 
@@ -167,11 +168,13 @@ func (l *TestLogger) Count(level string) int {
 	defer l.mu.Unlock()
 
 	count := 0
+
 	for _, entry := range l.entries {
 		if entry.Level == level {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -183,16 +186,19 @@ func (l *TestLogger) Contains(level string, substrings ...string) bool {
 	for _, entry := range l.entries {
 		if entry.Level == level {
 			allFound := true
+
 			for _, s := range substrings {
 				if !bytes.Contains([]byte(entry.Message), []byte(s)) {
 					allFound = false
 					break
 				}
 			}
+
 			if allFound {
 				return true
 			}
 		}
 	}
+
 	return false
 }

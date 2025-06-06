@@ -19,18 +19,21 @@ func ValidateEnvVariables(cfg *model.Config, l log.Logger) error {
 	if commons.IsNilOrEmpty(&cfg.ApplicationName) {
 		err := "missing application name environment variable"
 		l.Error(err)
+
 		return errors.New(err)
 	}
 
 	if commons.IsNilOrEmpty(&cfg.LicenseKey) {
 		err := "missing license key environment variable"
 		l.Error(err)
+
 		return errors.New(err)
 	}
 
 	if commons.IsNilOrEmpty(&cfg.OrganizationIDs) {
 		err := "missing organization IDs environment variable"
 		l.Error(err)
+
 		return errors.New(err)
 	}
 

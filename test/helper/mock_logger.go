@@ -149,6 +149,7 @@ func NewMockLogger() *log.Logger {
 	mockLogger := &MockLogger{}
 	// Return as log.Logger interface
 	var logger log.Logger = mockLogger
+
 	return &logger
 }
 
@@ -157,5 +158,6 @@ func AsMock(l *log.Logger) *MockLogger {
 	if mockLogger, ok := (*l).(*MockLogger); ok {
 		return mockLogger
 	}
+
 	return nil
 }

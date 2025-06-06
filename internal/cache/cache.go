@@ -22,7 +22,6 @@ func New(logger log.Logger) (*Manager, error) {
 		MaxCost:     1 << 20, // maximum cost of cache (1MB)
 		BufferItems: 64,      // number of keys per Get buffer
 	})
-
 	if err != nil {
 		return nil, err
 	}

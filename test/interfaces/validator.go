@@ -3,7 +3,7 @@ package interfaces
 
 import (
 	"context"
-	
+
 	"github.com/LerianStudio/lib-license-go/model"
 )
 

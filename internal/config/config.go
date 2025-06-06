@@ -19,8 +19,10 @@ func (c *ClientConfig) Validate() error {
 	if c.AppName == "" {
 		return errors.New("application name is required")
 	}
+
 	if len(c.OrganizationIDs) == 0 {
 		return errors.New("at least one organization ID is required")
 	}
+
 	return nil
 }

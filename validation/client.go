@@ -144,7 +144,9 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 
 	// Track if at least one organization has a valid license
 	var anyValid bool
+
 	var lastValidResult model.ValidationResult
+
 	var lastErr error
 
 	// Validate each organization ID
@@ -166,6 +168,7 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 		c.refreshManager.Shutdown()
 		c.logger.Error("No valid licenses found for any configured organization")
 		c.shutdownManager.Terminate("No valid licenses found for any configured organization")
+
 		return model.ValidationResult{}, lastErr
 	}
 
@@ -198,8 +201,8 @@ func (c *Client) validateAndHandleForOrg(ctx context.Context, orgID string) (mod
 
 // handleAPIError handles all API error cases
 func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
-	// Handle ApiErrors specially
-	if apiErr, ok := err.(*libErr.ApiError); ok {
+	// Handle APIErrors specially
+	if apiErr, ok := err.(*libErr.APIError); ok {
 		// Server errors (5xx) are treated as temporary and we fall back to cached value
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			c.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
@@ -247,6 +250,7 @@ func (c *Client) logValidResult(res model.ValidationResult) {
 	if len(c.config.OrganizationIDs) > 0 {
 		orgID = c.config.OrganizationIDs[0]
 	}
+
 	if res.Valid {
 		// Handle trial license
 		if res.IsTrial {
@@ -264,6 +268,7 @@ func (c *Client) logValidResult(res model.ValidationResult) {
 				// General trial notice
 				c.logger.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, res.ExpiryDaysLeft)
 			}
+
 			return
 		}
 
@@ -313,6 +318,7 @@ func (c *Client) GetOrganizationIDs() []string {
 	if c == nil || c.config == nil {
 		return []string{}
 	}
+
 	return c.config.OrganizationIDs
 }
 
@@ -322,6 +328,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 	// Simple retry mechanism for background validation
 	maxRetries := 3
 	backoff := 5 * time.Second
+
 	var lastErr error
 
 	// Use cached flag instead of recomputing each retry

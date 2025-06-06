@@ -17,13 +17,13 @@ type Validator interface {
 
 // Manager handles background refresh of license validation
 type Manager struct {
-	refreshInterval    time.Duration
-	started            bool
-	mu                 sync.Mutex
-	cancel             context.CancelFunc
-	validator          Validator
-	logger             log.Logger
-	lastAttemptedRefresh time.Time
+	refreshInterval       time.Duration
+	started               bool
+	mu                    sync.Mutex
+	cancel                context.CancelFunc
+	validator             Validator
+	logger                log.Logger
+	lastAttemptedRefresh  time.Time
 	lastSuccessfulRefresh time.Time
 }
 
@@ -43,7 +43,7 @@ func (m *Manager) Start(ctx context.Context) {
 		m.mu.Unlock()
 		return
 	}
-	
+
 	refreshCtx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
 	m.started = true
@@ -51,17 +51,18 @@ func (m *Manager) Start(ctx context.Context) {
 
 	// Start a ticker to periodically refresh the license
 	ticker := time.NewTicker(m.refreshInterval)
-	
+
 	go func() {
 		m.logger.Info("Starting background license refresh")
-		
+
 		for {
 			select {
 			case <-refreshCtx.Done():
 				ticker.Stop()
 				m.logger.Info("Background license refresh stopped")
+
 				return
-				
+
 			case <-ticker.C:
 				m.logger.Info("Running scheduled license validation")
 				m.attemptValidation(refreshCtx)
@@ -74,16 +75,16 @@ func (m *Manager) Start(ctx context.Context) {
 func (m *Manager) Shutdown() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if !m.started {
 		return
 	}
-	
+
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
 	}
-	
+
 	m.started = false
 	m.logger.Info("Background license refresh shutdown complete")
 }
@@ -93,15 +94,15 @@ func (m *Manager) attemptValidation(ctx context.Context) {
 	m.mu.Lock()
 	m.lastAttemptedRefresh = time.Now()
 	m.mu.Unlock()
-	
+
 	m.logger.Info("Attempting license validation with retry")
-	
+
 	err := m.validator.ValidateWithRetry(ctx)
 	if err == nil {
 		m.mu.Lock()
 		m.lastSuccessfulRefresh = time.Now()
 		m.mu.Unlock()
-		
+
 		m.logger.Info("License validation successful")
 	} else {
 		m.logger.Errorf("License validation failed after retries: %v", err)

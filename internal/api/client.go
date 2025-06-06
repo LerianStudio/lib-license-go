@@ -57,6 +57,7 @@ func getBaseURLFromEnvOrDefault() string {
 	if isDev == "true" {
 		return cn.DevLicenseGatewayBaseURL
 	}
+
 	return cn.ProdLicenseGatewayBaseURL
 }
 
@@ -69,12 +70,14 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 
 	// Try to validate with each organization ID
 	var lastErr error
+
 	for _, orgID := range c.config.OrganizationIDs {
 		result, err := c.validateForOrganization(ctx, orgID)
 		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
 			// If any organization has a valid license, return success
 			return result, nil
 		}
+
 		lastErr = err
 	}
 
@@ -98,7 +101,7 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 		return model.ValidationResult{}, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return model.ValidationResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -116,7 +119,8 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return c.handleErrorResponse(resp)
+		err := c.handleErrorResponse(resp)
+		return model.ValidationResult{}, err
 	}
 
 	var result model.ValidationResult
@@ -127,8 +131,9 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 	return result, nil
 }
 
-// handleErrorResponse processes error responses from the API
-func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResult, error) {
+// handleErrorResponse processes non-200 HTTP responses.
+// Returns an appropriate APIError based on the status code
+func (c *Client) handleErrorResponse(resp *http.Response) error {
 	var errorResp model.ErrorResponse
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
@@ -139,18 +144,20 @@ func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResul
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 		c.logger.Debugf("Server error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
-		return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
+
+		return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		apiErr := &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
+		apiErr := &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
 		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
 
-		return model.ValidationResult{}, apiErr
+		return apiErr
 	}
 
 	c.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, message: %s",
 		resp.StatusCode, errorResp.Code, errorResp.Message)
-	return model.ValidationResult{}, &libErr.ApiError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
+
+	return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 }
