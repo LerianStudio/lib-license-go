@@ -14,8 +14,8 @@ func SetTestLicenseBaseURL(url string) {
 	baseURL = strings.TrimSuffix(url, "/")
 }
 
-// ResetTestLicenseBaseURL resets the base URL to its default value
+// ResetTestLicenseBaseURL resets the base URL to the production URL value
 // This function should be called after tests to ensure the URL is reset
 func ResetTestLicenseBaseURL() {
-	baseURL = cn.DefaultLicenseGatewayBaseURL
+	baseURL = cn.ProdLicenseGatewayBaseURL
 }

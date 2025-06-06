@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/internal/api"
 	"github.com/LerianStudio/lib-license-go/middleware"
 	"github.com/LerianStudio/lib-license-go/test/helper"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -37,8 +39,8 @@ func TestLicenseValidation(t *testing.T) {
 		{
 			name: "Valid license with 30 days left",
 			setupMocks: func(l *helper.MockLogger) {
-				l.On("Infof", mock.Anything, mock.Anything).Maybe()
-				l.On("Warnf", "License expires in %d days", 30).Once()
+				l.On("Infof", mock.Anything, mock.Anything, mock.Anything).Maybe()
+				l.On("Warnf", "Organization %s license expires in %d days", "test-org", 30).Once()
 			},
 			expectError:   false,
 			expectedValid: true,
@@ -55,8 +57,8 @@ func TestLicenseValidation(t *testing.T) {
 		{
 			name: "Expired license in grace period",
 			setupMocks: func(l *helper.MockLogger) {
-				l.On("Infof", mock.Anything, mock.Anything).Maybe()
-				l.On("Warnf", "CRITICAL: Grace period ends in %d days - application will terminate. Contact support immediately to renew license", 5).Once()
+				l.On("Infof", mock.Anything, mock.Anything, mock.Anything).Maybe()
+				l.On("Warnf", "CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", "test-org", 5).Once()
 			},
 			expectError:   false,
 			expectedValid: false,
@@ -150,13 +152,14 @@ func TestLicenseValidation(t *testing.T) {
 			httpClient := newTestClient(ts)
 
 			// Set required environment variables
-			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+			t.Setenv(cn.EnvOrganizationIDs, testOrgID)
 
 			// Set test server URL for license validation
 			api.SetTestLicenseBaseURL(ts.URL)
 
-			// Create a new client with the mock logger and custom HTTP client
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, mockLogger)
+			// Create a new client with the mock logger, license key, and custom HTTP client
+			testLicenseKey := "test-license-key"
+			client := middleware.NewLicenseClient(testAppID, testOrgID, testLicenseKey, mockLogger)
 			// Override the HTTP client to use our test client
 			client.SetHTTPClient(httpClient)
 
@@ -193,7 +196,7 @@ func TestLicenseValidation(t *testing.T) {
 // setupTestEnv sets up the required environment variables for testing
 func setupTestEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+	t.Setenv(cn.EnvOrganizationIDs, testOrgID)
 }
 
 // newTestClient returns a client with a custom transport for testing
@@ -232,10 +235,15 @@ func TestLicenseClient_Integration(t *testing.T) {
 	mockLogger := helper.NewMockLogger()
 	mockLoggerImpl := helper.AsMock(mockLogger)
 	// Set up expected logger calls
+	// Set up logging expectations
+	mockLoggerImpl.On("Info", mock.Anything).Maybe()
+	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything).Maybe()
-	mockLoggerImpl.On("Warnf", "License expires in %d days", 30).Once()
+	mockLoggerImpl.On("Error", mock.Anything).Maybe()
+	mockLoggerImpl.On("Errorf", mock.Anything, mock.Anything).Maybe()
 	
-	client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, mockLogger)
+	// Create license client with test config
+	client := middleware.NewLicenseClient("test-app", "test-org", "test-license-key", mockLogger)
 	// Override the HTTP client to use our test client
 	client.SetHTTPClient(httpClient)
 

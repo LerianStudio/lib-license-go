@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/LerianStudio/lib-commons/commons/log"
+	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/middleware"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/test/helper"
@@ -126,7 +127,7 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 
 			// Set the required environment variables
 			t.Setenv("MIDAZ_LICENSE_URL", ts.URL)
-			t.Setenv("MIDAZ_ORGANIZATION_ID", testOrgID)
+			t.Setenv(cn.EnvOrganizationIDs, testOrgID)
 
 			// Create a mock logger
 			logger := helper.NewMockLogger()
@@ -143,8 +144,16 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 				mockLogger.On("Info", "License validation successful").Return()
 			}
 
+			// Support updated log formats for cache operations
+			mockLogger.On("Infof", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return()
+			mockLogger.On("Debugf", mock.AnythingOfType("string"), mock.AnythingOfType("string"),
+				mock.AnythingOfType("bool"), mock.AnythingOfType("int"), mock.AnythingOfType("bool"),
+				mock.AnythingOfType("bool")).Return()
+
 			// Create a new client with the mock logger and required parameters
-			client := middleware.NewLicenseClient(testAppID, testLicenseKey, testOrgID, logger)
+			// Add test license key
+			testLicenseKey := "test-license-key"
+			client := middleware.NewLicenseClient(testAppID, testOrgID, testLicenseKey, logger)
 
 			if tc.ExpectedPanic {
 				assert.Panics(t, func() {
