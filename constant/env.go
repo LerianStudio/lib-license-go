@@ -6,13 +6,13 @@ const (
 	EnvIsDevelopment = "IS_DEVELOPMENT"
 
 	// Organization IDs environment variable (comma-separated list)
-	EnvOrganizationIDs = "MIDAZ_ORGANIZATION_IDS"
+	EnvOrganizationIDs = "ORGANIZATION_IDS"
 
 	// Application name environment variable
-	EnvApplicationName = "MIDAZ_APPLICATION_NAME"
+	EnvApplicationName = "APPLICATION_NAME"
 
 	// License key environment variable
-	EnvLicenseKey = "MIDAZ_LICENSE_KEY"
+	EnvLicenseKey = "LICENSE_KEY"
 )
 
 // Special organization ID values

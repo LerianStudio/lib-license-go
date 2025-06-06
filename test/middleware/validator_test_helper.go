@@ -143,11 +143,11 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 			if tc.ExpectedValid {
 				mockLogger.On("Info", "License validation successful").Return()
 			}
-			
+
 			// Support updated log formats for cache operations
 			mockLogger.On("Infof", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return()
-			mockLogger.On("Debugf", mock.AnythingOfType("string"), mock.AnythingOfType("string"), 
-				mock.AnythingOfType("bool"), mock.AnythingOfType("int"), mock.AnythingOfType("bool"), 
+			mockLogger.On("Debugf", mock.AnythingOfType("string"), mock.AnythingOfType("string"),
+				mock.AnythingOfType("bool"), mock.AnythingOfType("int"), mock.AnythingOfType("bool"),
 				mock.AnythingOfType("bool")).Return()
 
 			// Create a new client with the mock logger and required parameters
