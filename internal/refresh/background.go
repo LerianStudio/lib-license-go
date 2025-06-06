@@ -60,6 +60,7 @@ func (m *Manager) Start(ctx context.Context) {
 			case <-refreshCtx.Done():
 				ticker.Stop()
 				m.logger.Info("Background license refresh stopped")
+
 				return
 
 			case <-ticker.C:

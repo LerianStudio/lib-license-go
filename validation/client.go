@@ -144,6 +144,7 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 
 	// Track if at least one organization has a valid license
 	var anyValid bool
+
 	var lastValidResult model.ValidationResult
 
 	var lastErr error

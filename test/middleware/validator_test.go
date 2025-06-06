@@ -36,7 +36,7 @@ func setupCommonMockExpectations(l *helper.MockLogger) {
 	// Specific debug logs that appear in tests
 	l.On("Debugf", "Client error during license validation - status: %d, code: %s, message: %s", 403, "INVALID_LICENSE", "invalid license").Maybe()
 	l.On("Debugf", "Server error during license validation - status: %d, code: %s, message: %s", 500, "", "").Maybe()
-	
+
 	// Allow any warning logs
 	l.On("Warnf", mock.Anything, mock.Anything).Maybe()
 	l.On("Warnf", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -269,14 +269,14 @@ func TestLicenseClient_Integration(t *testing.T) {
 	// Set up expected logger calls
 	// Set up common mock expectations
 	setupCommonMockExpectations(mockLoggerImpl)
-	
+
 	// Set up specific logging expectations
 	mockLoggerImpl.On("Info", mock.Anything).Maybe()
 	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLoggerImpl.On("Infof", mock.Anything, mock.Anything).Maybe()
 	mockLoggerImpl.On("Error", mock.Anything).Maybe()
 	mockLoggerImpl.On("Errorf", mock.Anything, mock.Anything).Maybe()
-	
+
 	// Specific warning for license expiration
 	mockLoggerImpl.On("Warnf", "Organization %s license expires in %d days", "test-org", 30).Maybe()
 

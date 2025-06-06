@@ -54,6 +54,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 		if c == nil || c.validator == nil {
 			return ctx.Next()
 		}
+
 		if c.validator.IsGlobal {
 			return c.handleGlobalPluginRequest(ctx)
 		}
@@ -68,6 +69,7 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
 	l.Info("Validating global plugin license")
+
 	result, err := c.validator.ValidateWithOrgID(ctx, constant.GlobalPluginValue)
 	if err != nil {
 		l.Errorf("Global license validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed)
@@ -88,6 +90,7 @@ func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context
 	l := c.validator.GetLogger()
 
 	l.Info("Validating organization-specific licenses")
+
 	orgIDs := c.validator.GetOrganizationIDs()
 
 	if len(orgIDs) == 0 {
@@ -103,6 +106,7 @@ func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context
 			l.Warnf("Validation for org %s failed: %v", orgID, err)
 			continue
 		}
+
 		if res.Valid || res.ActiveGracePeriod || res.IsTrial {
 			validFound = true
 
@@ -125,6 +129,7 @@ func (c *LicenseClient) handleGlobalPluginRequest(ctx *fiber.Ctx) error {
 	res, err := c.ValidateOrganization(ctx.Context(), constant.GlobalPluginValue)
 	if err != nil {
 		l.Warnf("Global validation failed: %v (code %s)", err, constant.ErrRequestGlobalLicenseValidationFail)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrRequestGlobalLicenseValidationFail,
 			"title":   "License Validation Failed",
@@ -141,6 +146,7 @@ func (c *LicenseClient) handleGlobalPluginRequest(ctx *fiber.Ctx) error {
 			"message": "Global license is invalid or expired",
 		})
 	}
+
 	return ctx.Next()
 }
 
@@ -151,6 +157,7 @@ func (c *LicenseClient) handleOrgSpecificPluginRequest(ctx *fiber.Ctx) error {
 	orgID := ctx.Get(constant.OrganizationIDHeader)
 	if orgID == "" {
 		l.Warnf("Missing org header (code %s)", constant.ErrMissingOrgIDHeader)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrMissingOrgIDHeader,
 			"title":   "Missing Organization ID",
@@ -160,6 +167,7 @@ func (c *LicenseClient) handleOrgSpecificPluginRequest(ctx *fiber.Ctx) error {
 
 	if !util.ContainsOrganizationID(c.validator.GetOrganizationIDs(), orgID) {
 		l.Warnf("Unknown org ID %s", orgID)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrMissingOrgIDHeader,
 			"title":   "Unknown Organization ID",
@@ -170,20 +178,24 @@ func (c *LicenseClient) handleOrgSpecificPluginRequest(ctx *fiber.Ctx) error {
 	res, err := c.ValidateOrganization(ctx.Context(), orgID)
 	if err != nil {
 		l.Warnf("Validation failed for org %s: %v (code %s)", orgID, err, constant.ErrOrgLicenseValidationFail)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrOrgLicenseValidationFail,
 			"title":   "License Validation Failed",
 			"message": fmt.Sprintf("License validation failed for organization %s", orgID),
 		})
 	}
+
 	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
 		l.Warnf("Org %s license invalid (code %s)", orgID, constant.ErrOrgLicenseInvalid)
+
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrOrgLicenseInvalid,
 			"title":   "Invalid License",
 			"message": fmt.Sprintf("License is invalid or expired for organization %s", orgID),
 		})
 	}
+
 	return ctx.Next()
 }
 
@@ -228,6 +240,7 @@ func (c *LicenseClient) logLicenseStatus(res model.ValidationResult, orgID strin
 				// General trial notice
 				l.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, res.ExpiryDaysLeft)
 			}
+
 			return
 		}
 

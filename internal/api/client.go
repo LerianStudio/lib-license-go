@@ -119,7 +119,8 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return c.handleErrorResponse(resp)
+		err := c.handleErrorResponse(resp)
+		return model.ValidationResult{}, err
 	}
 
 	var result model.ValidationResult
@@ -131,8 +132,8 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 }
 
 // handleErrorResponse processes non-200 HTTP responses.
-// First return value is always empty but kept for API consistency
-func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResult, error) {
+// Returns an appropriate APIError based on the status code
+func (c *Client) handleErrorResponse(resp *http.Response) error {
 	var errorResp model.ErrorResponse
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
@@ -143,7 +144,8 @@ func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResul
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 		c.logger.Debugf("Server error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
-		return model.ValidationResult{}, &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
+
+		return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
@@ -151,10 +153,11 @@ func (c *Client) handleErrorResponse(resp *http.Response) (model.ValidationResul
 		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
 
-		return model.ValidationResult{}, apiErr
+		return apiErr
 	}
 
 	c.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, message: %s",
 		resp.StatusCode, errorResp.Code, errorResp.Message)
-	return model.ValidationResult{}, &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
+
+	return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 }

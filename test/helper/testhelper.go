@@ -18,8 +18,10 @@ type TestServer struct {
 // NewTestServer creates a new test server with the given handler
 func NewTestServer(t *testing.T, handler http.Handler) *TestServer {
 	t.Helper()
+
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
+
 	return &TestServer{
 		Server: ts,
 		URL:    ts.URL,

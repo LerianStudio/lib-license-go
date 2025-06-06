@@ -114,6 +114,7 @@ type TestCase struct {
 // RunTestCases executes a list of test cases for license validation
 func RunTestCases(t *testing.T, testCases []TestCase) {
 	t.Helper()
+
 	const (
 		testAppID      = "test-app"
 		testLicenseKey = "test-key"
@@ -138,9 +139,11 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 			if tc.ExpectedErrorLogs > 0 {
 				mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything).Return()
 			}
+
 			if tc.ExpectedWarnLogs > 0 {
 				mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Return()
 			}
+
 			if tc.ExpectedValid {
 				mockLogger.On("Info", "License validation successful").Return()
 			}
@@ -182,6 +185,7 @@ func JSONResponse(t *testing.T, statusCode int, body any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
+
 		if body != nil {
 			err := json.NewEncoder(w).Encode(body)
 			require.NoError(t, err)
