@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/LerianStudio/lib-commons/commons/log"
+	"github.com/LerianStudio/lib-commons/commons/shutdown"
 	"github.com/LerianStudio/lib-commons/commons/zap"
 	cn "github.com/LerianStudio/lib-license-go/constant"
 	libErr "github.com/LerianStudio/lib-license-go/error"
@@ -15,7 +16,6 @@ import (
 	"github.com/LerianStudio/lib-license-go/internal/cache"
 	"github.com/LerianStudio/lib-license-go/internal/config"
 	"github.com/LerianStudio/lib-license-go/internal/refresh"
-	"github.com/LerianStudio/lib-license-go/internal/shutdown"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/util"
 )
@@ -26,7 +26,7 @@ type Client struct {
 	apiClient       *api.Client
 	cacheManager    *cache.Manager
 	refreshManager  *refresh.Manager
-	shutdownManager *shutdown.Manager
+	shutdownManager *shutdown.LicenseManagerShutdown
 	logger          log.Logger
 	// IsGlobal indicates if this client is running in global-plugin mode
 	IsGlobal bool
