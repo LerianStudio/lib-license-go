@@ -1,3 +1,10 @@
+## [1.1.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.0.0...v1.1.0-beta.1) (2025-06-09)
+
+
+### Bug Fixes
+
+* fix lib-commons ciclic dependency ([6f1f34a](https://github.com/LerianStudio/lib-license-go/commit/6f1f34a43899e62f333cea19fbe97421418c4589))
+
 ## 1.0.0 (2025-06-06)
 
 
