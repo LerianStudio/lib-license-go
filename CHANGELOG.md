@@ -1,3 +1,10 @@
+## [1.6.0](https://github.com/LerianStudio/lib-license-go/compare/v1.5.0...v1.6.0) (2025-06-10)
+
+
+### Features
+
+* add GetLicenseManagerShutdown method to expose shutdown manager from validator ([6854b00](https://github.com/LerianStudio/lib-license-go/commit/6854b008e95896af3f9a45b5c99a1e17cee85ef8))
+
 ## [1.6.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.5.0...v1.6.0-beta.1) (2025-06-10)
 
 
