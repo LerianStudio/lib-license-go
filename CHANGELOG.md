@@ -1,3 +1,10 @@
+## [1.3.0](https://github.com/LerianStudio/lib-license-go/compare/v1.2.1...v1.3.0) (2025-06-10)
+
+
+### Features
+
+* add git hooks for commit message formatting and branch protection ([8fec2b4](https://github.com/LerianStudio/lib-license-go/commit/8fec2b4950849509925f71228059280da0190e04))
+
 ## [1.3.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.2.1...v1.3.0-beta.1) (2025-06-10)
 
 
