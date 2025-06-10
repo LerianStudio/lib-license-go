@@ -45,6 +45,11 @@ func (c *Client) SetHTTPClient(client *http.Client) {
 	}
 }
 
+// GetHTTPClient returns the current HTTP client
+func (c *Client) GetHTTPClient() *http.Client {
+	return c.httpClient
+}
+
 // baseURL is used to store the license validation API URL
 // It's initialized from LICENSE_URL environment variable if available,
 // otherwise defaults to the predefined value
