@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -177,17 +178,8 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 
 // validateAndHandleForOrg performs validation for a specific organization ID
 func (c *Client) validateAndHandleForOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Since we can't directly call the unexported validateForOrganization method,
-	// we need to temporarily set the OrganizationIDs to only include this specific orgID
-	// and then call the exported ValidateLicense method
-	originalOrgIDs := c.config.OrganizationIDs
-	c.config.OrganizationIDs = []string{orgID}
-
-	// Perform validation for this specific organization ID
-	res, err := c.apiClient.ValidateLicense(ctx)
-
-	// Restore the original OrganizationIDs
-	c.config.OrganizationIDs = originalOrgIDs
+	// Use validateSingleOrg to validate just this organization ID
+	res, err := c.validateSingleOrg(ctx, orgID)
 
 	if err != nil {
 		return c.handleAPIError(err)
@@ -197,6 +189,24 @@ func (c *Client) validateAndHandleForOrg(ctx context.Context, orgID string) (mod
 	c.cacheManager.Store(orgID, res)
 
 	return res, nil
+}
+
+// validateSingleOrg validates a license for a single organization ID without modifying client state
+func (c *Client) validateSingleOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// Create a temporary config with just this organization ID
+	tempConfig := &config.ClientConfig{
+		AppName:         c.config.AppName,
+		LicenseKey:      c.config.LicenseKey,
+		OrganizationIDs: []string{orgID},
+		HTTPTimeout:     c.config.HTTPTimeout,
+		RefreshInterval: c.config.RefreshInterval,
+	}
+
+	// Create a temporary API client with the single org config
+	tempClient := api.New(tempConfig, c.apiClient.GetHTTPClient(), c.logger)
+
+	// Perform validation using the temporary client
+	return tempClient.ValidateLicense(ctx)
 }
 
 // handleAPIError handles all API error cases
@@ -244,57 +254,73 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 
 // logValidResult handles a valid license response
 func (c *Client) logValidResult(res model.ValidationResult) {
-	// This function is called from validateAndHandleForOrg where we've set the OrganizationIDs to a single ID
-	// So we can safely get the first (and only) ID from the list
-	orgID := ""
-	if len(c.config.OrganizationIDs) > 0 {
-		orgID = c.config.OrganizationIDs[0]
+	// Get organization ID from the client config
+	orgID := c.getOrgIDForLogging()
+
+	// Handle different license states
+	switch {
+	case res.Valid && res.IsTrial:
+		c.logTrialLicense(orgID, res.ExpiryDaysLeft)
+	case res.Valid:
+		c.logValidLicense(orgID, res.ExpiryDaysLeft)
 	}
 
-	if res.Valid {
-		// Handle trial license
-		if res.IsTrial {
-			messagePrefix := "TRIAL LICENSE"
-			messageSuffix := "Please upgrade to a full license to continue using the application"
-
-			// Handle active trial license
-			if res.ExpiryDaysLeft == cn.DefaultLicenseExpiredDays {
-				// Trial license expires today
-				c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
-			} else if res.ExpiryDaysLeft <= cn.DefaultTrialExpiryDaysToWarn {
-				// Trial license is about to expire soon
-				c.logger.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, res.ExpiryDaysLeft, messageSuffix)
-			} else {
-				// General trial notice
-				c.logger.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, res.ExpiryDaysLeft)
-			}
-
-			return
-		}
-
-		// Log based on license state for non-trial licenses
-
-		if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToUrgentWarn {
-			// License valid and within 7 days of expiration - urgent warning
-			c.logger.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, res.ExpiryDaysLeft)
-		} else if res.ExpiryDaysLeft <= cn.DefaultMinExpiryDaysToNormalWarn {
-			// License valid but approaching expiration - normal warning
-			c.logger.Warnf("Organization %s license expires in %d days", orgID, res.ExpiryDaysLeft)
-		} else {
-			// General valid license message
-			c.logger.Infof("Organization %s has a valid license", orgID)
-		}
-	}
-
-	// License is in grace period
+	// Handle grace period separately (can occur with valid licenses)
 	if res.ActiveGracePeriod {
-		if res.ExpiryDaysLeft <= cn.DefaultGraceExpiryDaysToCriticalWarn {
-			// Grace period is about to expire
-			c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, res.ExpiryDaysLeft)
-		} else {
-			// General grace period warning
-			c.logger.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more days", orgID, res.ExpiryDaysLeft)
-		}
+		c.logGracePeriod(orgID, res.ExpiryDaysLeft)
+	}
+}
+
+// getOrgIDForLogging safely extracts the organization ID for logging purposes
+func (c *Client) getOrgIDForLogging() string {
+	if len(c.config.OrganizationIDs) > 0 {
+		return c.config.OrganizationIDs[0]
+	}
+
+	return "unknown"
+}
+
+// logTrialLicense handles logging for trial licenses
+func (c *Client) logTrialLicense(orgID string, expiryDays int) {
+	messagePrefix := "TRIAL LICENSE"
+	messageSuffix := "Please upgrade to a full license to continue using the application"
+
+	switch {
+	case expiryDays == cn.DefaultLicenseExpiredDays:
+		// Trial license expires today
+		c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
+	case expiryDays <= cn.DefaultTrialExpiryDaysToWarn:
+		// Trial license is about to expire soon
+		c.logger.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, expiryDays, messageSuffix)
+	default:
+		// General trial notice
+		c.logger.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, expiryDays)
+	}
+}
+
+// logValidLicense handles logging for valid non-trial licenses
+func (c *Client) logValidLicense(orgID string, expiryDays int) {
+	switch {
+	case expiryDays <= cn.DefaultMinExpiryDaysToUrgentWarn:
+		// License valid and within urgent warning threshold
+		c.logger.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, expiryDays)
+	case expiryDays <= cn.DefaultMinExpiryDaysToNormalWarn:
+		// License valid but approaching expiration
+		c.logger.Warnf("Organization %s license expires in %d days", orgID, expiryDays)
+	default:
+		// General valid license message
+		c.logger.Infof("Organization %s has a valid license", orgID)
+	}
+}
+
+// logGracePeriod handles logging for licenses in grace period
+func (c *Client) logGracePeriod(orgID string, expiryDays int) {
+	if expiryDays <= cn.DefaultGraceExpiryDaysToCriticalWarn {
+		// Grace period is about to expire
+		c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, expiryDays)
+	} else {
+		// General grace period warning
+		c.logger.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more days", orgID, expiryDays)
 	}
 }
 
@@ -335,27 +361,54 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 	isGlobalPlugin := c.IsGlobal
 
 	for i := 0; i < maxRetries; i++ {
+		// Create a timeout context for this validation attempt
+		timeoutCtx, cancel := context.WithTimeout(ctx, c.config.HTTPTimeout)
+
 		var err error
 
+		// Perform the validation with the timeout context
 		if isGlobalPlugin {
 			// For global plugin, only validate with the global organization ID
 			c.logger.Debug("Refreshing global plugin license validation")
-			_, err = c.ValidateWithOrgID(ctx, cn.GlobalPluginValue)
+			_, err = c.ValidateWithOrgID(timeoutCtx, cn.GlobalPluginValue)
 		} else {
 			// For regular multi-org mode, validate all organization IDs
-			_, err = c.validateAndHandleAllOrgs(ctx)
+			_, err = c.validateAndHandleAllOrgs(timeoutCtx)
 		}
+
+		// Always cancel the timeout context when done with this attempt
+		cancel()
 
 		if err == nil {
 			return nil
 		}
 
+		// Check if the error was due to context timeout or cancellation
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			c.logger.Warnf("Validation attempt %d/%d timed out or was canceled", i+1, maxRetries)
+		} else {
+			c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
+		}
+
 		lastErr = err
-		c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
+
+		// Check if parent context is done before sleeping
+		if ctx.Err() != nil {
+			c.logger.Debug("Parent context canceled, stopping retry attempts")
+			break
+		}
 
 		// Wait before retrying, unless this is the last attempt
 		if i < maxRetries-1 {
-			time.Sleep(backoff)
+			// Use a timer with context to allow for cancellation during backoff
+			select {
+			case <-time.After(backoff):
+				// Continue with next retry
+			case <-ctx.Done():
+				c.logger.Debug("Context canceled during backoff, stopping retry attempts")
+				return ctx.Err()
+			}
+
 			backoff *= 2 // Exponential backoff
 		}
 	}
