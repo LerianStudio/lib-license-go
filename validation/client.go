@@ -276,6 +276,7 @@ func (c *Client) getOrgIDForLogging() string {
 	if len(c.config.OrganizationIDs) > 0 {
 		return c.config.OrganizationIDs[0]
 	}
+
 	return "unknown"
 }
 
@@ -362,6 +363,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 	for i := 0; i < maxRetries; i++ {
 		// Create a timeout context for this validation attempt
 		timeoutCtx, cancel := context.WithTimeout(ctx, c.config.HTTPTimeout)
+
 		var err error
 
 		// Perform the validation with the timeout context
@@ -406,6 +408,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 				c.logger.Debug("Context canceled during backoff, stopping retry attempts")
 				return ctx.Err()
 			}
+
 			backoff *= 2 // Exponential backoff
 		}
 	}
