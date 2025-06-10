@@ -74,17 +74,43 @@ func NewRoutes(license *libLicense.LicenseClient, [...]) *fiber.App {
 #### Add graceful shutdown support in your server using the `lib-commons` package function `StartServerWithGracefulShutdown`
 
 ```go
-libCommons "github.com/LerianStudio/lib-commons/commons/shutdown"
+"github.com/LerianStudio/lib-commons/commons"
+"github.com/LerianStudio/lib-commons/commons/log"
+"github.com/LerianStudio/lib-commons/commons/opentelemetry"
+"github.com/LerianStudio/lib-commons/commons/shutdown"
+"github.com/gofiber/fiber/v2"
+
+type Server struct {
+	app           *fiber.App
+	serverAddress string
+	licenseClient *shutdown.LicenseManagerShutdown
+	logger        log.Logger
+	telemetry     opentelemetry.Telemetry
+}
+
+func (s *Server) ServerAddress() string {
+	return s.serverAddress
+}
+
+func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *shutdown.LicenseManagerShutdown) *Server {
+	return &Server{
+		app:           app,
+		serverAddress: cfg.ServerAddress,
+		licenseClient: licenseClient,
+		logger:        logger,
+		telemetry:     *telemetry,
+	}
+}
 
 func (s *Server) Run(l *commons.Launcher) error {
-	s.Info("Starting server with graceful shutdown support")
+	s.logger.Info("Starting server with graceful shutdown support")
 
-	libCommons.StartServerWithGracefulShutdown(
+	shutdown.StartServerWithGracefulShutdown(
 		s.app,
 		s.licenseClient,
-		&s.Telemetry,
+		&s.telemetry,
 		s.ServerAddress(),
-		s.Logger,
+		s.logger,
 	)
 
 	return nil
