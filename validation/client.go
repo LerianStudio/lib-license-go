@@ -105,6 +105,11 @@ func (c *Client) SetHTTPClient(client *http.Client) {
 	c.apiClient.SetHTTPClient(client)
 }
 
+// GetShutdownManager returns the license shutdown manager
+func (c *Client) GetShutdownManager() *shutdown.LicenseManagerShutdown {
+	return c.shutdownManager
+}
+
 // SetTerminationHandler allows customizing how the application terminates when license validation fails
 func (c *Client) SetTerminationHandler(handler shutdown.Handler) {
 	c.shutdownManager.SetHandler(handler)
