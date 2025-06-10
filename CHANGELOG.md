@@ -1,3 +1,10 @@
+## [1.5.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.4.0...v1.5.0-beta.1) (2025-06-10)
+
+
+### Features
+
+* **validation:** expose GetShutdownManager method for license client ([0df6818](https://github.com/LerianStudio/lib-license-go/commit/0df681811c0ba46367d22701b9508b2ec86b3440))
+
 ## [1.4.0](https://github.com/LerianStudio/lib-license-go/compare/v1.3.0...v1.4.0) (2025-06-10)
 
 ## [1.4.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.3.0...v1.4.0-beta.1) (2025-06-10)
