@@ -21,7 +21,7 @@ type LicenseClient struct {
 }
 
 // NewLicenseClient creates a new license client with middleware capabilities
-func NewLicenseClient(appID, orgIDs, licenseKey string, logger *log.Logger) *LicenseClient {
+func NewLicenseClient(appID, licenseKey, orgIDs string, logger *log.Logger) *LicenseClient {
 	// Create validation client (handles logger internally)
 	validator, err := validation.New(appID, licenseKey, orgIDs, logger)
 	if err != nil {
