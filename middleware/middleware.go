@@ -301,5 +301,6 @@ func (c *LicenseClient) GetLicenseManagerShutdown() *shutdown.LicenseManagerShut
 	if c != nil && c.validator != nil {
 		return c.validator.GetShutdownManager()
 	}
+
 	return nil
 }
