@@ -1,3 +1,11 @@
+## [1.2.1](https://github.com/LerianStudio/lib-license-go/compare/v1.1.0...v1.2.1) (2025-06-10)
+
+
+### Features
+
+* add readme documentation for multiorg support ([bea76ba](https://github.com/LerianStudio/lib-license-go/commit/bea76ba7699937c1df783f137ead386bbce52b1c))
+
+
 ## [1.1.0](https://github.com/LerianStudio/lib-license-go/compare/v1.0.0...v1.1.0) (2025-06-09)
 
 
@@ -71,5 +79,3 @@
 * remove token from the validate api gateway url concat ([f21ebb0](https://github.com/LerianStudio/lib-license-go/commit/f21ebb00f764db3bc85d2bc92c9484fe153434f7))
 * update gateway base url and add apikey to header ([a9429d2](https://github.com/LerianStudio/lib-license-go/commit/a9429d283534edfe0e9232d0b18488985d609219))
 * update gateway url to be fixed and keep testability ([53aabc8](https://github.com/LerianStudio/lib-license-go/commit/53aabc8d220701d5e766973b5e2f01f0a27f8cdb))
-
-## [1.3.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.2.1...v1.3.0-beta.1) (2025-06-06)
