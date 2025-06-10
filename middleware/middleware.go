@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/LerianStudio/lib-commons/commons/log"
+	"github.com/LerianStudio/lib-commons/commons/shutdown"
 	"github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/util"
@@ -293,4 +294,12 @@ func (c *LicenseClient) ShutdownBackgroundRefresh() {
 // GetLogger returns the logger used by the client
 func (c *LicenseClient) GetLogger() log.Logger {
 	return c.validator.GetLogger()
+}
+
+// GetLicenseManagerShutdown returns the shutdown manager from the validation client
+func (c *LicenseClient) GetLicenseManagerShutdown() *shutdown.LicenseManagerShutdown {
+	if c != nil && c.validator != nil {
+		return c.validator.GetShutdownManager()
+	}
+	return nil
 }
