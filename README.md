@@ -78,12 +78,13 @@ func NewRoutes(license *libLicense.LicenseClient, [...]) *fiber.App {
 "github.com/LerianStudio/lib-commons/commons/log"
 "github.com/LerianStudio/lib-commons/commons/opentelemetry"
 "github.com/LerianStudio/lib-commons/commons/shutdown"
+libLicense "github.com/LerianStudio/lib-license-go/middleware"
 "github.com/gofiber/fiber/v2"
 
 type Server struct {
 	app           *fiber.App
 	serverAddress string
-	licenseClient *shutdown.LicenseManagerShutdown
+	license			  *shutdown.LicenseManagerShutdown
 	logger        log.Logger
 	telemetry     opentelemetry.Telemetry
 }
@@ -92,11 +93,11 @@ func (s *Server) ServerAddress() string {
 	return s.serverAddress
 }
 
-func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *shutdown.LicenseManagerShutdown) *Server {
+func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *Server {
 	return &Server{
 		app:           app,
 		serverAddress: cfg.ServerAddress,
-		licenseClient: licenseClient,
+		license: 			 licenseClient.GetLicenseManagerShutdown(),
 		logger:        logger,
 		telemetry:     *telemetry,
 	}
@@ -107,7 +108,7 @@ func (s *Server) Run(l *commons.Launcher) error {
 
 	shutdown.StartServerWithGracefulShutdown(
 		s.app,
-		s.licenseClient,
+		s.license,
 		&s.telemetry,
 		s.ServerAddress(),
 		s.logger,
