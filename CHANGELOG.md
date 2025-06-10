@@ -1,3 +1,10 @@
+## [1.7.0](https://github.com/LerianStudio/lib-license-go/compare/v1.6.0...v1.7.0) (2025-06-10)
+
+
+### Bug Fixes
+
+* use license key instead of organization ID for API authentication ([8b0ba0f](https://github.com/LerianStudio/lib-license-go/commit/8b0ba0fd1650c9f4d2d66c66da8af6a6ee367d3f))
+
 ## [1.7.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.6.0...v1.7.0-beta.1) (2025-06-10)
 
 
