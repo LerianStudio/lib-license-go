@@ -114,7 +114,7 @@ func (c *Client) validateForOrganization(ctx context.Context, orgID string) (mod
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add organization ID as API key in header
-	req.Header.Set("x-api-key", orgID)
+	req.Header.Set("x-api-key", c.config.LicenseKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
