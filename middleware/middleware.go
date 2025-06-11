@@ -220,53 +220,18 @@ func (c *LicenseClient) ValidateOrganization(ctx context.Context, orgID string) 
 	return c.validator.ValidateWithOrgID(ctx, orgID)
 }
 
-// logLicenseStatus logs the license status with organization ID
+// logLicenseStatus delegates license status logging to the validation client
+// which has specialized logging functions for different license conditions
+// The validation client already implements comprehensive license logging with specialized functions:
+// - logTrialLicense for trial licenses
+// - logValidLicense for valid non-trial licenses
+// - logGracePeriod for licenses in grace period
+// No need to duplicate logging logic here
+// Only log errors for invalid licenses not in grace period when not in grace period and not trial
 func (c *LicenseClient) logLicenseStatus(res model.ValidationResult, orgID string) {
-	l := c.validator.GetLogger()
-
-	if res.Valid {
-		// Handle trial license
-		if res.IsTrial {
-			messagePrefix := "TRIAL LICENSE"
-			messageSuffix := "Please upgrade to a full license to continue using the application"
-
-			// Handle active trial license
-			if res.ExpiryDaysLeft == 0 {
-				// Trial license expires today
-				l.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
-			} else if res.ExpiryDaysLeft <= 7 { // Using a constant for clarity
-				// Trial license is about to expire soon
-				l.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, res.ExpiryDaysLeft, messageSuffix)
-			} else {
-				// General trial notice
-				l.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, res.ExpiryDaysLeft)
-			}
-
-			return
-		}
-
-		// Log based on license state for non-trial licenses
-		if res.ExpiryDaysLeft <= 7 { // Urgent warning threshold
-			// License valid and within 7 days of expiration - urgent warning
-			l.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, res.ExpiryDaysLeft)
-		} else if res.ExpiryDaysLeft <= 30 { // Normal warning threshold
-			// License valid but approaching expiration - normal warning
-			l.Warnf("Organization %s license expires in %d days", orgID, res.ExpiryDaysLeft)
-		} else {
-			// General valid license message
-			l.Infof("Organization %s has a valid license", orgID)
-		}
-	}
-
-	// License is in grace period
-	if res.ActiveGracePeriod {
-		if res.ExpiryDaysLeft <= 3 { // Critical grace period warning threshold
-			// Grace period is about to expire
-			l.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, res.ExpiryDaysLeft)
-		} else {
-			// General grace period warning
-			l.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more days", orgID, res.ExpiryDaysLeft)
-		}
+	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
+		l := c.validator.GetLogger()
+		l.Errorf("LICENSE INVALID: Organization %s has no valid license - application access will be denied", orgID)
 	}
 }
 
