@@ -69,7 +69,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	l.Info("Validating global plugin license")
+	l.Debug("Validating global plugin license")
 
 	result, err := c.validator.ValidateWithOrgID(ctx, constant.GlobalPluginValue)
 	if err != nil {
@@ -90,7 +90,7 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	l.Info("Validating organization-specific licenses")
+	l.Debug("Validating organization-specific licenses")
 
 	orgIDs := c.validator.GetOrganizationIDs()
 

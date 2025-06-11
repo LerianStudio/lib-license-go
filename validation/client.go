@@ -52,7 +52,7 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 		LicenseKey:      licenseKey,
 		OrganizationIDs: parsedOrgIDs,
 		HTTPTimeout:     cn.DefaultHTTPTimeoutSeconds * time.Second,
-		RefreshInterval: cn.DefaultRefreshIntervalDays * 24 * time.Hour,
+		RefreshInterval: cn.DefaultRefreshIntervalHours * time.Hour,
 	}
 
 	if err := cfg.Validate(); err != nil {

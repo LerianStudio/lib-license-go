@@ -10,8 +10,8 @@ const (
 const (
 	// DefaultHTTPTimeoutSeconds is the default HTTP client timeout in seconds
 	DefaultHTTPTimeoutSeconds = 5
-	// DefaultRefreshIntervalDays is the default license refresh interval in days
-	DefaultRefreshIntervalDays = 7
+	// DefaultRefreshIntervalHours is the default license refresh interval in hours
+	DefaultRefreshIntervalHours = 2
 )
 
 // ExpiryThresholds defines license expiration warning thresholds
@@ -22,8 +22,8 @@ const (
 	DefaultMinExpiryDaysToUrgentWarn = 7
 	// DefaultGraceExpiryDaysToCriticalWarn is the threshold for critical grace period warnings
 	DefaultGraceExpiryDaysToCriticalWarn = 7
-	// DefaultTrialExpiryDaysToWarn is the threshold for trial license expiry warnings
-	DefaultTrialExpiryDaysToWarn = 2
+	// DefaultTrialExpiryDaysToWarn is the threshold for trial license expiry warnings (1 day left)
+	DefaultTrialExpiryDaysToWarn = 1
 	// DefaultLicenseExpiredDays represents a license that expires today
 	DefaultLicenseExpiredDays = 0
 )
