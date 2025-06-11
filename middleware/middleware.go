@@ -222,17 +222,13 @@ func (c *LicenseClient) ValidateOrganization(ctx context.Context, orgID string) 
 
 // logLicenseStatus delegates license status logging to the validation client
 // which has specialized logging functions for different license conditions
+// The validation client already implements comprehensive license logging with specialized functions:
+// - logTrialLicense for trial licenses
+// - logValidLicense for valid non-trial licenses
+// - logGracePeriod for licenses in grace period
+// No need to duplicate logging logic here
+// Only log errors for invalid licenses not in grace period when not in grace period and not trial
 func (c *LicenseClient) logLicenseStatus(res model.ValidationResult, orgID string) {
-	// The validation client already implements comprehensive license logging
-	// No need to duplicate logging logic here
-
-	// These validation client methods already handle all the different license states:
-	// - logTrialLicense for trial licenses
-	// - logValidLicense for valid non-trial licenses
-	// - logGracePeriod for licenses in grace period
-
-	// Only log errors for invalid licenses not in grace period
-	// All other logging is handled by the validation client
 	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
 		l := c.validator.GetLogger()
 		l.Errorf("LICENSE INVALID: Organization %s has no valid license - application access will be denied", orgID)
