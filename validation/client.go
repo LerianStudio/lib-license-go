@@ -100,72 +100,106 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	return client, nil
 }
 
-// SetHTTPClient allows overriding the HTTP client (useful for testing)
-func (c *Client) SetHTTPClient(client *http.Client) {
-	c.apiClient.SetHTTPClient(client)
-}
-
-// GetShutdownManager returns the license shutdown manager
-func (c *Client) GetShutdownManager() *shutdown.LicenseManagerShutdown {
-	return c.shutdownManager
-}
-
-// SetTerminationHandler allows customizing how the application terminates when license validation fails
-func (c *Client) SetTerminationHandler(handler shutdown.Handler) {
-	c.shutdownManager.SetHandler(handler)
-}
-
-// Validate checks if the license is valid with caching
+// Validate checks if the license is valid with caching for all configured organizations
 func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 	// Perform initial validation for all organization IDs
 	// This is used during application startup to ensure at least one organization has a valid license
-	return c.validateAndHandleAllOrgs(ctx)
+	return c.validateAllOrganizations(ctx)
 }
 
-// ValidateWithOrgID checks if the license is valid for a specific organization ID
-// This is typically used in middleware when processing a request with an organization ID header
+// ValidateWithOrgID validates a license for a specific organization ID with caching
 func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Check if the organization ID is in our list of valid IDs
-	if !util.ContainsOrganizationID(c.config.OrganizationIDs, orgID) {
-		return model.ValidationResult{}, fmt.Errorf("organization ID %s is not in the allowed list", orgID)
+	// In global plugin mode, always use the global plugin ID
+	validationOrgID := orgID
+
+	if c.IsGlobal {
+		c.logger.Debugf("Global plugin mode: using global ID for validation instead of %s", orgID)
+
+		validationOrgID = cn.GlobalPluginValue
 	}
 
-	// Check cache first
-	if result, found := c.cacheManager.Get(orgID); found {
+	// Check if the organization ID is already in the cache
+	if result, found := c.cacheManager.Get(validationOrgID); found {
 		return result, nil
 	}
 
 	// Not in cache, perform validation
-	return c.validateAndHandleForOrg(ctx, orgID)
+	return c.validateSingleOrganization(ctx, validationOrgID)
 }
 
-// validateAndHandleAllOrgs performs validation for all organization IDs
-// At least one organization must have a valid license for the application to continue
-func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.ValidationResult, error) {
+// validateAllOrganizations performs validation for all organization IDs
+// At least one organization must have a valid license for the application to continue.
+// This function collects all validation errors but will not terminate unless all validations fail.
+func (c *Client) validateAllOrganizations(ctx context.Context) (model.ValidationResult, error) {
 	// If no organization IDs are configured, return an error
 	if len(c.config.OrganizationIDs) == 0 {
 		c.logger.Error("No organization IDs configured")
-		return model.ValidationResult{}, fmt.Errorf("no organization IDs configured")
+		return model.ValidationResult{}, cn.ErrNoOrganizationIDs
+	}
+
+	// Special handling for global plugin mode
+	if c.IsGlobal {
+		c.logger.Debug("Validating in global plugin mode")
+		result, err := c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
+
+		return result, err
 	}
 
 	// Track if at least one organization has a valid license
 	var anyValid bool
 
 	var lastValidResult model.ValidationResult
-
-	var lastErr error
+	// We'll collect all errors, but don't need lastErr since we're using allOrgErrors
+	var allOrgErrors []error
 
 	// Validate each organization ID
 	for _, orgID := range c.config.OrganizationIDs {
-		result, err := c.validateAndHandleForOrg(ctx, orgID)
+		// Use performAPIValidation to validate just this organization ID directly
+		// We bypass error handling to collect all errors before making a decision
+		result, err := c.performAPIValidation(ctx, orgID)
 
-		// If this organization has a valid license, we're good
+		// Check if this is a server error (5xx) which should be treated as valid with grace period
+		if apiErr, ok := err.(*libErr.APIError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
+			c.logger.Warnf("License server error (5xx) detected for organization %s, treating as valid - error: %s",
+				orgID, apiErr.Error())
+
+			// Create a temporary valid license result
+			tempResult := model.ValidationResult{
+				Valid:             true,
+				ExpiryDaysLeft:    cn.FallbackExpiryDaysLeft,
+				ActiveGracePeriod: true,
+			}
+
+			// Store this result in cache
+			c.cacheManager.Store(orgID, tempResult)
+
+			// Mark as valid
+			anyValid = true
+			lastValidResult = tempResult
+
+			continue
+		}
+
 		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
+			// If this organization has a valid license, we're good
 			anyValid = true
 			lastValidResult = result
+			c.logValidResult(result)
+			c.cacheManager.Store(orgID, result)
 		} else {
-			lastErr = err
-			c.logger.Warnf("Organization %s has invalid license: %v", orgID, err)
+			if err != nil {
+				allOrgErrors = append(allOrgErrors, fmt.Errorf("org %s: %w", orgID, err))
+
+				// For APIErrors, we want to log appropriately but not terminate
+				if apiErr, ok := err.(*libErr.APIError); ok {
+					c.logger.Warnf("Organization %s license validation failed with status code %d: %v",
+						orgID, apiErr.StatusCode, apiErr.Error())
+				} else {
+					c.logger.Warnf("Organization %s has invalid license: %v", orgID, err)
+				}
+			} else {
+				c.logger.Warnf("Organization %s has invalid license status", orgID)
+			}
 		}
 	}
 
@@ -173,36 +207,63 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 	if !anyValid {
 		c.refreshManager.Shutdown()
 		c.logger.Error("No valid licenses found for any configured organization")
-		c.shutdownManager.Terminate("No valid licenses found for any configured organization")
 
-		return model.ValidationResult{}, lastErr
+		// Construct a comprehensive error message with all validation errors
+		var errMsg string
+
+		if len(allOrgErrors) > 0 {
+			errMsgs := make([]string, len(allOrgErrors))
+			for i, err := range allOrgErrors {
+				errMsgs[i] = err.Error()
+			}
+
+			errMsg = fmt.Sprintf("All license validations failed: [%s]", strings.Join(errMsgs, "; "))
+		} else {
+			errMsg = "No valid licenses found for any configured organization"
+		}
+
+		c.shutdownManager.Terminate(errMsg)
+
+		return model.ValidationResult{}, errors.New(errMsg)
 	}
 
 	return lastValidResult, nil
 }
 
-// validateAndHandleForOrg performs validation for a specific organization ID
-func (c *Client) validateAndHandleForOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Use validateSingleOrg to validate just this organization ID
-	res, err := c.validateSingleOrg(ctx, orgID)
-
+// validateSingleOrganization performs validation for a specific organization ID
+// and handles the result (caching, logging, error handling)
+func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// Validate for this single org
+	result, err := c.performAPIValidation(ctx, orgID)
 	if err != nil {
+		// Handle errors according to type
 		return c.handleAPIError(err)
 	}
 
-	c.logValidResult(res)
-	c.cacheManager.Store(orgID, res)
+	// Successful validation
+	c.logValidResult(result)
+	c.cacheManager.Store(orgID, result)
 
-	return res, nil
+	return result, nil
 }
 
-// validateSingleOrg validates a license for a single organization ID without modifying client state
-func (c *Client) validateSingleOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
+// performAPIValidation makes the actual API request to validate a license for a single organization ID
+// This is a low-level function that only performs the API call without handling the result
+func (c *Client) performAPIValidation(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// Handle global plugin mode
+	validationOrgID := orgID
+	if c.IsGlobal {
+		// In global plugin mode, always use the global plugin organization ID
+		validationOrgID = cn.GlobalPluginValue
+
+		c.logger.Debugf("Using global plugin ID for validation instead of %s", orgID)
+	}
+
 	// Create a temporary config with just this organization ID
 	tempConfig := &config.ClientConfig{
 		AppName:         c.config.AppName,
 		LicenseKey:      c.config.LicenseKey,
-		OrganizationIDs: []string{orgID},
+		OrganizationIDs: []string{validationOrgID},
 		HTTPTimeout:     c.config.HTTPTimeout,
 		RefreshInterval: c.config.RefreshInterval,
 	}
@@ -214,7 +275,76 @@ func (c *Client) validateSingleOrg(ctx context.Context, orgID string) (model.Val
 	return tempClient.ValidateLicense(ctx)
 }
 
+// ValidateWithRetry implements refresh.Validator interface
+// It attempts to validate the license with retries
+func (c *Client) ValidateWithRetry(ctx context.Context) error {
+	// Simple retry mechanism for background validation
+	maxRetries := 3
+	backoff := 5 * time.Second
+
+	var lastErr error
+
+	// Use cached flag instead of recomputing each retry
+	isGlobalPlugin := c.IsGlobal
+
+	for i := 0; i < maxRetries; i++ {
+		// Create a timeout context for this validation attempt
+		timeoutCtx, cancel := context.WithTimeout(ctx, c.config.HTTPTimeout)
+
+		var err error
+
+		// Perform the validation with the timeout context
+		if isGlobalPlugin {
+			// For global plugin, only validate with the global organization ID
+			c.logger.Debug("Refreshing global plugin license validation")
+			_, err = c.ValidateWithOrgID(timeoutCtx, cn.GlobalPluginValue)
+		} else {
+			// For regular multi-org mode, validate all organization IDs
+			_, err = c.validateAllOrganizations(timeoutCtx)
+		}
+
+		// Always cancel the timeout context when done with this attempt
+		cancel()
+
+		if err == nil {
+			return nil
+		}
+
+		// Check if the error was due to context timeout or cancellation
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			c.logger.Warnf("Validation attempt %d/%d timed out or was canceled", i+1, maxRetries)
+		} else {
+			c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
+		}
+
+		lastErr = err
+
+		// Check if parent context is done before sleeping
+		if ctx.Err() != nil {
+			c.logger.Debug("Parent context canceled, stopping retry attempts")
+			break
+		}
+
+		// Wait before retrying, unless this is the last attempt
+		if i < maxRetries-1 {
+			// Use a timer with context to allow for cancellation during backoff
+			select {
+			case <-time.After(backoff):
+				// Continue with next retry
+			case <-ctx.Done():
+				c.logger.Debug("Context canceled during backoff, stopping retry attempts")
+				return ctx.Err()
+			}
+
+			backoff *= 2 // Exponential backoff
+		}
+	}
+
+	return lastErr
+}
+
 // handleAPIError handles all API error cases
+// This is called for single organization validation (not from validateAndHandleAllOrgs)
 func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 	// Handle APIErrors specially
 	if apiErr, ok := err.(*libErr.APIError); ok {
@@ -235,12 +365,18 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 			}, nil
 		}
 
-		// Client errors (4xx) are fatal - license is invalid
+		// Client errors (4xx) are fatal for single org validation - license is invalid
+		// In multi-org validation, these errors are handled in validateAndHandleAllOrgs
 		if apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
+			// Check if we're in a multi-org validation process
+			if len(c.config.OrganizationIDs) > 1 {
+				// For multi-org validation, just return the error so the loop can continue
+				return model.ValidationResult{}, apiErr
+			}
+
+			// For single org validation, terminate as before
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
 			c.refreshManager.Shutdown()
-
-			// Terminate the application
 			c.shutdownManager.Terminate("License validation failed with client error: " + apiErr.Error())
 		}
 	}
@@ -353,70 +489,17 @@ func (c *Client) GetOrganizationIDs() []string {
 	return c.config.OrganizationIDs
 }
 
-// ValidateWithRetry implements refresh.Validator interface
-// It attempts to validate the license with retries
-func (c *Client) ValidateWithRetry(ctx context.Context) error {
-	// Simple retry mechanism for background validation
-	maxRetries := 3
-	backoff := 5 * time.Second
+// SetHTTPClient allows overriding the HTTP client (useful for testing)
+func (c *Client) SetHTTPClient(client *http.Client) {
+	c.apiClient.SetHTTPClient(client)
+}
 
-	var lastErr error
+// GetShutdownManager returns the license shutdown manager
+func (c *Client) GetShutdownManager() *shutdown.LicenseManagerShutdown {
+	return c.shutdownManager
+}
 
-	// Use cached flag instead of recomputing each retry
-	isGlobalPlugin := c.IsGlobal
-
-	for i := 0; i < maxRetries; i++ {
-		// Create a timeout context for this validation attempt
-		timeoutCtx, cancel := context.WithTimeout(ctx, c.config.HTTPTimeout)
-
-		var err error
-
-		// Perform the validation with the timeout context
-		if isGlobalPlugin {
-			// For global plugin, only validate with the global organization ID
-			c.logger.Debug("Refreshing global plugin license validation")
-			_, err = c.ValidateWithOrgID(timeoutCtx, cn.GlobalPluginValue)
-		} else {
-			// For regular multi-org mode, validate all organization IDs
-			_, err = c.validateAndHandleAllOrgs(timeoutCtx)
-		}
-
-		// Always cancel the timeout context when done with this attempt
-		cancel()
-
-		if err == nil {
-			return nil
-		}
-
-		// Check if the error was due to context timeout or cancellation
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			c.logger.Warnf("Validation attempt %d/%d timed out or was canceled", i+1, maxRetries)
-		} else {
-			c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
-		}
-
-		lastErr = err
-
-		// Check if parent context is done before sleeping
-		if ctx.Err() != nil {
-			c.logger.Debug("Parent context canceled, stopping retry attempts")
-			break
-		}
-
-		// Wait before retrying, unless this is the last attempt
-		if i < maxRetries-1 {
-			// Use a timer with context to allow for cancellation during backoff
-			select {
-			case <-time.After(backoff):
-				// Continue with next retry
-			case <-ctx.Done():
-				c.logger.Debug("Context canceled during backoff, stopping retry attempts")
-				return ctx.Err()
-			}
-
-			backoff *= 2 // Exponential backoff
-		}
-	}
-
-	return lastErr
+// SetTerminationHandler allows customizing how the application terminates when license validation fails
+func (c *Client) SetTerminationHandler(handler shutdown.Handler) {
+	c.shutdownManager.SetHandler(handler)
 }

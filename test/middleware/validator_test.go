@@ -45,6 +45,13 @@ func setupCommonMockExpectations(l *helper.MockLogger) {
 	l.On("Warnf", "Organization %s license expires in %d days", "test-org", 30).Maybe()
 	l.On("Warnf", "CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", "test-org", 5).Maybe()
 	l.On("Warnf", "License server error (5xx) detected, treating as valid - error: %s", "server error: 500").Maybe()
+	
+	// Allow error logs (added to support multi-org validation)
+	l.On("Error", mock.Anything).Maybe()
+	l.On("Error", "No organization IDs configured").Maybe()
+	l.On("Error", "No valid licenses found for any configured organization").Maybe()
+	l.On("Errorf", mock.Anything, mock.Anything).Maybe()
+	l.On("Errorf", "Exiting: license validation failed with client error: %s", mock.Anything).Maybe()
 }
 
 func TestLicenseValidation(t *testing.T) {

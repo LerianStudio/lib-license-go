@@ -65,8 +65,8 @@ func TestGlobalPluginMode(t *testing.T) {
 		assert.NotPanics(t, func() {
 			client := middleware.NewLicenseClient(
 				"test-app",
-				cn.GlobalPluginValue,
 				"test-license-key",
+				cn.GlobalPluginValue,
 				mockLogger,
 			)
 
@@ -83,8 +83,8 @@ func TestGlobalPluginMode(t *testing.T) {
 		// Create a license client with global plugin mode
 		client := middleware.NewLicenseClient(
 			"test-app",
-			cn.GlobalPluginValue,
 			"test-license-key",
+			cn.GlobalPluginValue,
 			mockLogger,
 		)
 
