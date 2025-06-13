@@ -100,27 +100,37 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	return client, nil
 }
 
-// Validate checks if the license is valid with caching
+// Validate checks if the license is valid with caching for all configured organizations
 func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 	// Perform initial validation for all organization IDs
 	// This is used during application startup to ensure at least one organization has a valid license
-	return c.validateAndHandleAllOrgs(ctx)
+	return c.validateAllOrganizations(ctx)
 }
 
-// ValidateWithOrgID validates a license for a specific organization ID
+// ValidateWithOrgID validates a license for a specific organization ID with caching
 func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// In global plugin mode, always use the global plugin ID
+	validationOrgID := orgID
+
+	if c.IsGlobal {
+		c.logger.Debugf("Global plugin mode: using global ID for validation instead of %s", orgID)
+
+		validationOrgID = cn.GlobalPluginValue
+	}
+
 	// Check if the organization ID is already in the cache
-	if result, found := c.cacheManager.Get(orgID); found {
+	if result, found := c.cacheManager.Get(validationOrgID); found {
 		return result, nil
 	}
 
 	// Not in cache, perform validation
-	return c.validateAndHandleForOrg(ctx, orgID)
+	return c.validateSingleOrganization(ctx, validationOrgID)
 }
 
-// validateAndHandleAllOrgs performs validation for all organization IDs
-// At least one organization must have a valid license for the application to continue
-func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.ValidationResult, error) {
+// validateAllOrganizations performs validation for all organization IDs
+// At least one organization must have a valid license for the application to continue.
+// This function collects all validation errors but will not terminate unless all validations fail.
+func (c *Client) validateAllOrganizations(ctx context.Context) (model.ValidationResult, error) {
 	// If no organization IDs are configured, return an error
 	if len(c.config.OrganizationIDs) == 0 {
 		c.logger.Error("No organization IDs configured")
@@ -130,8 +140,7 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 	// Special handling for global plugin mode
 	if c.IsGlobal {
 		c.logger.Debug("Validating in global plugin mode")
-
-		result, err := c.validateAndHandleForOrg(ctx, cn.GlobalPluginValue)
+		result, err := c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
 
 		return result, err
 	}
@@ -145,9 +154,9 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 
 	// Validate each organization ID
 	for _, orgID := range c.config.OrganizationIDs {
-		// Use validateSingleOrg to validate just this organization ID
-		// We bypass validateAndHandleForOrg here to avoid immediate termination on errors
-		result, err := c.validateSingleOrg(ctx, orgID)
+		// Use performAPIValidation to validate just this organization ID directly
+		// We bypass error handling to collect all errors before making a decision
+		result, err := c.performAPIValidation(ctx, orgID)
 
 		// Check if this is a server error (5xx) which should be treated as valid with grace period
 		if apiErr, ok := err.(*libErr.APIError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
@@ -221,28 +230,40 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 	return lastValidResult, nil
 }
 
-// validateAndHandleForOrg performs validation for a specific organization ID
-func (c *Client) validateAndHandleForOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Use validateSingleOrg to validate just this organization ID
-	res, err := c.validateSingleOrg(ctx, orgID)
-
+// validateSingleOrganization performs validation for a specific organization ID
+// and handles the result (caching, logging, error handling)
+func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// Validate for this single org
+	result, err := c.performAPIValidation(ctx, orgID)
 	if err != nil {
+		// Handle errors according to type
 		return c.handleAPIError(err)
 	}
 
-	c.logValidResult(res)
-	c.cacheManager.Store(orgID, res)
+	// Successful validation
+	c.logValidResult(result)
+	c.cacheManager.Store(orgID, result)
 
-	return res, nil
+	return result, nil
 }
 
-// validateSingleOrg validates a license for a single organization ID without modifying client state
-func (c *Client) validateSingleOrg(ctx context.Context, orgID string) (model.ValidationResult, error) {
+// performAPIValidation makes the actual API request to validate a license for a single organization ID
+// This is a low-level function that only performs the API call without handling the result
+func (c *Client) performAPIValidation(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	// Handle global plugin mode
+	validationOrgID := orgID
+	if c.IsGlobal {
+		// In global plugin mode, always use the global plugin organization ID
+		validationOrgID = cn.GlobalPluginValue
+
+		c.logger.Debugf("Using global plugin ID for validation instead of %s", orgID)
+	}
+
 	// Create a temporary config with just this organization ID
 	tempConfig := &config.ClientConfig{
 		AppName:         c.config.AppName,
 		LicenseKey:      c.config.LicenseKey,
-		OrganizationIDs: []string{orgID},
+		OrganizationIDs: []string{validationOrgID},
 		HTTPTimeout:     c.config.HTTPTimeout,
 		RefreshInterval: c.config.RefreshInterval,
 	}
@@ -279,7 +300,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 			_, err = c.ValidateWithOrgID(timeoutCtx, cn.GlobalPluginValue)
 		} else {
 			// For regular multi-org mode, validate all organization IDs
-			_, err = c.validateAndHandleAllOrgs(timeoutCtx)
+			_, err = c.validateAllOrganizations(timeoutCtx)
 		}
 
 		// Always cancel the timeout context when done with this attempt
