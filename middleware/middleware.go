@@ -44,7 +44,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 		if c.validator.IsGlobal {
 			c.validateGlobalLicenseOnStartup(bgCtx)
 		} else {
-			c.validateOrgSpecificLicensesOnStartup(bgCtx)
+			c.validateMultiOrgLicensesOnStartup(bgCtx)
 		}
 		// Kick-off background refresh regardless of mode
 		go c.validator.StartBackgroundRefresh(bgCtx)
@@ -57,10 +57,10 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 		}
 
 		if c.validator.IsGlobal {
-			return c.handleGlobalPluginRequest(ctx)
+			return c.processGlobalPluginRequest(ctx)
 		}
 
-		return c.handleOrgSpecificPluginRequest(ctx)
+		return c.processMultiOrgPluginRequest(ctx)
 	}
 }
 
@@ -85,9 +85,9 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	c.logLicenseStatus(result, constant.GlobalPluginValue)
 }
 
-// validateOrgSpecificLicensesOnStartup validates each configured organization licence at startup.
+// validateMultiOrgLicensesOnStartup validates each configured organization licence at startup.
 // Panics if no valid licences are found so that the app never starts unlicensed.
-func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context) {
+func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
 	l.Info("Validating organization-specific licenses")
@@ -123,36 +123,17 @@ func (c *LicenseClient) validateOrgSpecificLicensesOnStartup(ctx context.Context
 	}
 }
 
-// handleGlobalPluginRequest validates global licence every request.
-func (c *LicenseClient) handleGlobalPluginRequest(ctx *fiber.Ctx) error {
-	l := c.validator.GetLogger()
-
-	res, err := c.ValidateOrganization(ctx.Context(), constant.GlobalPluginValue)
-	if err != nil {
-		l.Warnf("Global validation failed: %v (code %s)", err, constant.ErrRequestGlobalLicenseValidationFail.Error())
-
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrRequestGlobalLicenseValidationFail.Error(),
-			"title":   "License Validation Failed",
-			"message": "Global plugin license validation failed",
-		})
-	}
-
-	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
-		l.Warnf("Global license invalid (code %s)", constant.ErrRequestGlobalLicenseInvalid.Error())
-
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrRequestGlobalLicenseInvalid.Error(),
-			"title":   "Invalid License",
-			"message": "Global license is invalid or expired",
-		})
-	}
-
+// processGlobalPluginRequest handles requests in global plugin mode.
+// Since validation happens at startup and through background refresh,
+// we don't need to validate on each request for global mode.
+func (c *LicenseClient) processGlobalPluginRequest(ctx *fiber.Ctx) error {
+	// In global mode, we're already validated at startup and through background refresh
+	// No need to validate on each request - just continue processing
 	return ctx.Next()
 }
 
-// handleOrgSpecificPluginRequest validates license for org ID provided in header.
-func (c *LicenseClient) handleOrgSpecificPluginRequest(ctx *fiber.Ctx) error {
+// processMultiOrgPluginRequest validates license for org ID provided in header.
+func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 	l := c.validator.GetLogger()
 
 	orgID := ctx.Get(constant.OrganizationIDHeader)

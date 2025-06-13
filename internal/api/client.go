@@ -21,6 +21,8 @@ type Client struct {
 	httpClient *http.Client
 	config     *config.ClientConfig
 	logger     log.Logger
+	// IsGlobal indicates if this client is operating in global plugin mode
+	IsGlobal   bool
 }
 
 // New creates a new API client
@@ -31,10 +33,14 @@ func New(cfg *config.ClientConfig, httpClient *http.Client, logger log.Logger) *
 		}
 	}
 
+	// Check if there's only one organization ID and it's the global plugin value
+	isGlobal := len(cfg.OrganizationIDs) == 1 && cfg.OrganizationIDs[0] == cn.GlobalPluginValue
+
 	return &Client{
 		httpClient: httpClient,
 		config:     cfg,
 		logger:     logger,
+		IsGlobal:   isGlobal,
 	}
 }
 
@@ -94,11 +100,18 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 func (c *Client) validateForOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
 	url := fmt.Sprintf("%s/licenses/validate", baseURL)
 
+	// Use global plugin value if in global mode
+	validationOrgID := orgID
+	if c.IsGlobal {
+		validationOrgID = cn.GlobalPluginValue
+		c.logger.Debugf("Global plugin mode: using global ID (%s) for validation instead of %s", cn.GlobalPluginValue, orgID)
+	}
+
 	// Request body with application name, organization ID, and license key
 	reqBody := map[string]string{
 		"resourceName":   c.config.AppName,
 		"licenseKey":     c.config.LicenseKey,
-		"organizationId": orgID,
+		"organizationId": validationOrgID,
 	}
 
 	body, err := json.Marshal(reqBody)
