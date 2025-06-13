@@ -124,18 +124,21 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 	// If no organization IDs are configured, return an error
 	if len(c.config.OrganizationIDs) == 0 {
 		c.logger.Error("No organization IDs configured")
-		return model.ValidationResult{}, fmt.Errorf("no organization IDs configured")
+		return model.ValidationResult{}, cn.ErrNoOrganizationIDs
 	}
-	
+
 	// Special handling for global plugin mode
 	if c.IsGlobal {
 		c.logger.Debug("Validating in global plugin mode")
+
 		result, err := c.validateAndHandleForOrg(ctx, cn.GlobalPluginValue)
+
 		return result, err
 	}
 
 	// Track if at least one organization has a valid license
 	var anyValid bool
+
 	var lastValidResult model.ValidationResult
 	// We'll collect all errors, but don't need lastErr since we're using allOrgErrors
 	var allOrgErrors []error
@@ -145,28 +148,29 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 		// Use validateSingleOrg to validate just this organization ID
 		// We bypass validateAndHandleForOrg here to avoid immediate termination on errors
 		result, err := c.validateSingleOrg(ctx, orgID)
-		
+
 		// Check if this is a server error (5xx) which should be treated as valid with grace period
 		if apiErr, ok := err.(*libErr.APIError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
-			c.logger.Warnf("License server error (5xx) detected for organization %s, treating as valid - error: %s", 
+			c.logger.Warnf("License server error (5xx) detected for organization %s, treating as valid - error: %s",
 				orgID, apiErr.Error())
-				
+
 			// Create a temporary valid license result
 			tempResult := model.ValidationResult{
 				Valid:             true,
 				ExpiryDaysLeft:    cn.FallbackExpiryDaysLeft,
 				ActiveGracePeriod: true,
 			}
-			
+
 			// Store this result in cache
 			c.cacheManager.Store(orgID, tempResult)
-			
+
 			// Mark as valid
 			anyValid = true
 			lastValidResult = tempResult
+
 			continue
 		}
-		
+
 		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
 			// If this organization has a valid license, we're good
 			anyValid = true
@@ -176,10 +180,10 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 		} else {
 			if err != nil {
 				allOrgErrors = append(allOrgErrors, fmt.Errorf("org %s: %w", orgID, err))
-				
+
 				// For APIErrors, we want to log appropriately but not terminate
 				if apiErr, ok := err.(*libErr.APIError); ok {
-					c.logger.Warnf("Organization %s license validation failed with status code %d: %v", 
+					c.logger.Warnf("Organization %s license validation failed with status code %d: %v",
 						orgID, apiErr.StatusCode, apiErr.Error())
 				} else {
 					c.logger.Warnf("Organization %s has invalid license: %v", orgID, err)
@@ -194,21 +198,24 @@ func (c *Client) validateAndHandleAllOrgs(ctx context.Context) (model.Validation
 	if !anyValid {
 		c.refreshManager.Shutdown()
 		c.logger.Error("No valid licenses found for any configured organization")
-		
+
 		// Construct a comprehensive error message with all validation errors
 		var errMsg string
+
 		if len(allOrgErrors) > 0 {
 			errMsgs := make([]string, len(allOrgErrors))
 			for i, err := range allOrgErrors {
 				errMsgs[i] = err.Error()
 			}
-			errMsg = "All license validations failed: [" + strings.Join(errMsgs, "; ") + "]"
+
+			errMsg = fmt.Sprintf("All license validations failed: [%s]", strings.Join(errMsgs, "; "))
 		} else {
 			errMsg = "No valid licenses found for any configured organization"
 		}
-		
+
 		c.shutdownManager.Terminate(errMsg)
-		return model.ValidationResult{}, fmt.Errorf(errMsg)
+
+		return model.ValidationResult{}, errors.New(errMsg)
 	}
 
 	return lastValidResult, nil
@@ -345,7 +352,7 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 				// For multi-org validation, just return the error so the loop can continue
 				return model.ValidationResult{}, apiErr
 			}
-			
+
 			// For single org validation, terminate as before
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
 			c.refreshManager.Shutdown()
