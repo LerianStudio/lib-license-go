@@ -426,11 +426,14 @@ func (c *Client) logTrialLicense(orgID string, expiryDays int) {
 	messagePrefix := "TRIAL LICENSE"
 	messageSuffix := "Please upgrade to a full license to continue using the application"
 
+	// Convert days to hours for comparison with hour-based constants
+	expiryHours := expiryDays * 24
+
 	switch {
-	case expiryDays == cn.DefaultLicenseExpiredDays:
+	case expiryHours == cn.DefaultLicenseExpiredHours:
 		// Trial license expires today
 		c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
-	case expiryDays <= cn.DefaultTrialExpiryDaysToWarn:
+	case expiryHours <= cn.DefaultTrialExpiryHoursToWarn:
 		// Trial license is about to expire soon
 		c.logger.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, expiryDays, messageSuffix)
 	default:
@@ -441,11 +444,14 @@ func (c *Client) logTrialLicense(orgID string, expiryDays int) {
 
 // logValidLicense handles logging for valid non-trial licenses
 func (c *Client) logValidLicense(orgID string, expiryDays int) {
+	// Convert days to hours for comparison with hour-based constants
+	expiryHours := expiryDays * 24
+
 	switch {
-	case expiryDays <= cn.DefaultMinExpiryDaysToUrgentWarn:
+	case expiryHours <= cn.DefaultMinExpiryHoursToUrgentWarn:
 		// License valid and within urgent warning threshold
 		c.logger.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, expiryDays)
-	case expiryDays <= cn.DefaultMinExpiryDaysToNormalWarn:
+	case expiryHours <= cn.DefaultMinExpiryHoursToNormalWarn:
 		// License valid but approaching expiration
 		c.logger.Warnf("Organization %s license expires in %d days", orgID, expiryDays)
 	default:
@@ -456,7 +462,10 @@ func (c *Client) logValidLicense(orgID string, expiryDays int) {
 
 // logGracePeriod handles logging for licenses in grace period
 func (c *Client) logGracePeriod(orgID string, expiryDays int) {
-	if expiryDays <= cn.DefaultGraceExpiryDaysToCriticalWarn {
+	// Convert days to hours for comparison with hour-based constants
+	expiryHours := expiryDays * 24
+
+	if expiryHours <= cn.DefaultGraceExpiryHoursToCriticalWarn {
 		// Grace period is about to expire
 		c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, expiryDays)
 	} else {

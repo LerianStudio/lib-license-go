@@ -16,14 +16,14 @@ const (
 
 // ExpiryThresholds defines license expiration warning thresholds
 const (
-	// DefaultMinExpiryDaysToNormalWarn is the threshold for normal expiry warnings
-	DefaultMinExpiryDaysToNormalWarn = 30
-	// DefaultMinExpiryDaysToUrgentWarn is the threshold for urgent expiry warnings
-	DefaultMinExpiryDaysToUrgentWarn = 7
-	// DefaultGraceExpiryDaysToCriticalWarn is the threshold for critical grace period warnings
-	DefaultGraceExpiryDaysToCriticalWarn = 7
-	// DefaultTrialExpiryDaysToWarn is the threshold for trial license expiry warnings (1 day left)
-	DefaultTrialExpiryDaysToWarn = 1
-	// DefaultLicenseExpiredDays represents a license that expires today
-	DefaultLicenseExpiredDays = 0
+	// DefaultMinExpiryHoursToNormalWarn is the threshold for normal expiry warnings
+	DefaultMinExpiryHoursToNormalWarn = 12
+	// DefaultMinExpiryHoursToUrgentWarn is the threshold for urgent expiry warnings
+	DefaultMinExpiryHoursToUrgentWarn = 6
+	// DefaultGraceExpiryHoursToCriticalWarn is the threshold for critical grace period warnings
+	DefaultGraceExpiryHoursToCriticalWarn = 3
+	// DefaultTrialExpiryHoursToWarn is the threshold for trial license expiry warnings
+	DefaultTrialExpiryHoursToWarn = 1
+	// DefaultLicenseExpiredHours represents a license that expires now
+	DefaultLicenseExpiredHours = 0
 )
