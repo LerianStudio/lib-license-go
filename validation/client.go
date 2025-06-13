@@ -111,8 +111,10 @@ func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.ValidationResult, error) {
 	// In global plugin mode, always use the global plugin ID
 	validationOrgID := orgID
+
 	if c.IsGlobal {
 		c.logger.Debugf("Global plugin mode: using global ID for validation instead of %s", orgID)
+
 		validationOrgID = cn.GlobalPluginValue
 	}
 
@@ -139,6 +141,7 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 	if c.IsGlobal {
 		c.logger.Debug("Validating in global plugin mode")
 		result, err := c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
+
 		return result, err
 	}
 
@@ -240,6 +243,7 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 	// Successful validation
 	c.logValidResult(result)
 	c.cacheManager.Store(orgID, result)
+
 	return result, nil
 }
 
@@ -251,6 +255,7 @@ func (c *Client) performAPIValidation(ctx context.Context, orgID string) (model.
 	if c.IsGlobal {
 		// In global plugin mode, always use the global plugin organization ID
 		validationOrgID = cn.GlobalPluginValue
+
 		c.logger.Debugf("Using global plugin ID for validation instead of %s", orgID)
 	}
 
