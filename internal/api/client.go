@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/LerianStudio/lib-commons/commons"
 	"github.com/LerianStudio/lib-commons/commons/log"
 	cn "github.com/LerianStudio/lib-license-go/constant"
 	libErr "github.com/LerianStudio/lib-license-go/error"
@@ -22,7 +23,7 @@ type Client struct {
 	config     *config.ClientConfig
 	logger     log.Logger
 	// IsGlobal indicates if this client is operating in global plugin mode
-	IsGlobal   bool
+	IsGlobal bool
 }
 
 // New creates a new API client
@@ -72,46 +73,30 @@ func getBaseURLFromEnvOrDefault() string {
 	return cn.ProdLicenseGatewayBaseURL
 }
 
-// ValidateLicense performs the license validation API call for a specific organization ID
-func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, error) {
-	// If no organization IDs are configured, return an error
-	if len(c.config.OrganizationIDs) == 0 {
-		return model.ValidationResult{}, fmt.Errorf("no organization IDs configured")
+// ValidateOrganization validates the license with the provided organization ID
+// Returns the first successful validation result or the last error encountered
+func (c *Client) ValidateOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	if commons.IsNilOrEmpty(&orgID) {
+		return model.ValidationResult{}, fmt.Errorf("no organization ID provided")
 	}
 
-	// Try to validate with each organization ID
-	var lastErr error
-
-	for _, orgID := range c.config.OrganizationIDs {
-		result, err := c.validateForOrganization(ctx, orgID)
-		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
-			// If any organization has a valid license, return success
-			return result, nil
-		}
-
-		lastErr = err
+	result, err := c.validateForOrganization(ctx, orgID)
+	if err != nil {
+		return model.ValidationResult{}, err
 	}
 
-	// If we reach here, no valid license was found
-	return model.ValidationResult{}, lastErr
+	return result, nil
 }
 
 // validateForOrganization performs the license validation API call for a specific organization ID
 func (c *Client) validateForOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
 	url := fmt.Sprintf("%s/licenses/validate", baseURL)
 
-	// Use global plugin value if in global mode
-	validationOrgID := orgID
-	if c.IsGlobal {
-		validationOrgID = cn.GlobalPluginValue
-		c.logger.Debugf("Global plugin mode: using global ID (%s) for validation instead of %s", cn.GlobalPluginValue, orgID)
-	}
-
 	// Request body with application name, organization ID, and license key
 	reqBody := map[string]string{
 		"resourceName":   c.config.AppName,
 		"licenseKey":     c.config.LicenseKey,
-		"organizationId": validationOrgID,
+		"organizationId": orgID,
 	}
 
 	body, err := json.Marshal(reqBody)
