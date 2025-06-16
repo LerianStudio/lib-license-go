@@ -95,7 +95,9 @@ func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	for _, orgID := range orgIDs {
 		res, err := c.validator.ValidateWithOrgID(ctx, orgID)
 		if err != nil {
-			l.Warnf("Validation failed for org %s: %v", orgID, err)
+			l.Warnf("Validation failed for org %s", orgID)
+			l.Debugf("error: %v", err)
+
 			continue
 		}
 
