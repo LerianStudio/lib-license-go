@@ -48,7 +48,7 @@ func (m *Manager) Get(orgID string) (model.ValidationResult, bool) {
 // Store caches a validation result with a fixed TTL
 func (m *Manager) Store(orgID string, result model.ValidationResult) {
 	// Store with a fixed TTL of 3 hours (ensure regular re-validation)
-	m.cache.SetWithTTL(orgID, result, 1, 3*time.Hour)
+	m.cache.SetWithTTL(orgID, result, 1, 45*time.Minute)
 
 	// Keep a backup copy for fallback in case of server errors
 	resultCopy := result

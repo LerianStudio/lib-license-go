@@ -390,10 +390,10 @@ func (c *Client) logTrialLicense(orgID string, expiryDays int) {
 		c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
 	case expiryHours <= cn.DefaultTrialExpiryHoursToWarn:
 		// Trial license is about to expire soon
-		c.logger.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, expiryDays, messageSuffix)
+		c.logger.Warnf("%s: Organization %s trial expires in %d hours. %s", messagePrefix, orgID, expiryHours, messageSuffix)
 	default:
 		// General trial notice
-		c.logger.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, expiryDays)
+		c.logger.Infof("%s: Organization %s is using a trial license that expires in %d hours", messagePrefix, orgID, expiryHours)
 	}
 }
 
