@@ -90,7 +90,7 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	// detect global plugin mode
 	client.IsGlobal = len(parsedOrgIDs) == 1 && strings.EqualFold(parsedOrgIDs[0], cn.GlobalPluginValue)
 	if client.IsGlobal {
-		l.Infof("Validation client initialized in global plugin mode")
+		l.Debugf("Validation client initialized in global plugin mode")
 	}
 
 	// Create and set up refresh manager
@@ -109,22 +109,13 @@ func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
 
 // ValidateWithOrgID validates a license for a specific organization ID with caching
 func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// In global plugin mode, always use the global plugin ID
-	validationOrgID := orgID
-
-	if c.IsGlobal {
-		c.logger.Debugf("Global plugin mode: using global ID for validation instead of %s", orgID)
-
-		validationOrgID = cn.GlobalPluginValue
-	}
-
 	// Check if the organization ID is already in the cache
-	if result, found := c.cacheManager.Get(validationOrgID); found {
+	if result, found := c.cacheManager.Get(orgID); found {
 		return result, nil
 	}
 
 	// Not in cache, perform validation
-	return c.validateSingleOrganization(ctx, validationOrgID)
+	return c.validateSingleOrganization(ctx, orgID)
 }
 
 // validateAllOrganizations performs validation for all organization IDs
@@ -133,13 +124,11 @@ func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.Val
 func (c *Client) validateAllOrganizations(ctx context.Context) (model.ValidationResult, error) {
 	// If no organization IDs are configured, return an error
 	if len(c.config.OrganizationIDs) == 0 {
-		c.logger.Error("No organization IDs configured")
 		return model.ValidationResult{}, cn.ErrNoOrganizationIDs
 	}
 
 	// Special handling for global plugin mode
 	if c.IsGlobal {
-		c.logger.Debug("Validating in global plugin mode")
 		result, err := c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
 
 		return result, err
@@ -180,7 +169,7 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 			continue
 		}
 
-		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
+		if err == nil && (result.Valid || result.ActiveGracePeriod) {
 			// If this organization has a valid license, we're good
 			anyValid = true
 			lastValidResult = result
@@ -206,7 +195,6 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 	// If no valid organizations, terminate the application
 	if !anyValid {
 		c.refreshManager.Shutdown()
-		c.logger.Error("No valid licenses found for any configured organization")
 
 		// Construct a comprehensive error message with all validation errors
 		var errMsg string
@@ -250,20 +238,11 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 // performAPIValidation makes the actual API request to validate a license for a single organization ID
 // This is a low-level function that only performs the API call without handling the result
 func (c *Client) performAPIValidation(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Handle global plugin mode
-	validationOrgID := orgID
-	if c.IsGlobal {
-		// In global plugin mode, always use the global plugin organization ID
-		validationOrgID = cn.GlobalPluginValue
-
-		c.logger.Debugf("Using global plugin ID for validation instead of %s", orgID)
-	}
-
 	// Create a temporary config with just this organization ID
 	tempConfig := &config.ClientConfig{
 		AppName:         c.config.AppName,
 		LicenseKey:      c.config.LicenseKey,
-		OrganizationIDs: []string{validationOrgID},
+		OrganizationIDs: []string{orgID},
 		HTTPTimeout:     c.config.HTTPTimeout,
 		RefreshInterval: c.config.RefreshInterval,
 	}
@@ -284,24 +263,13 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 
 	var lastErr error
 
-	// Use cached flag instead of recomputing each retry
-	isGlobalPlugin := c.IsGlobal
-
 	for i := 0; i < maxRetries; i++ {
 		// Create a timeout context for this validation attempt
 		timeoutCtx, cancel := context.WithTimeout(ctx, c.config.HTTPTimeout)
 
 		var err error
 
-		// Perform the validation with the timeout context
-		if isGlobalPlugin {
-			// For global plugin, only validate with the global organization ID
-			c.logger.Debug("Refreshing global plugin license validation")
-			_, err = c.ValidateWithOrgID(timeoutCtx, cn.GlobalPluginValue)
-		} else {
-			// For regular multi-org mode, validate all organization IDs
-			_, err = c.validateAllOrganizations(timeoutCtx)
-		}
+		_, err = c.validateAllOrganizations(timeoutCtx)
 
 		// Always cancel the timeout context when done with this attempt
 		cancel()
@@ -312,9 +280,9 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 
 		// Check if the error was due to context timeout or cancellation
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			c.logger.Warnf("Validation attempt %d/%d timed out or was canceled", i+1, maxRetries)
+			c.logger.Debugf("Validation attempt %d/%d timed out or was canceled", i+1, maxRetries)
 		} else {
-			c.logger.Warnf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
+			c.logger.Debugf("Validation retry %d/%d failed: %v", i+1, maxRetries, err)
 		}
 
 		lastErr = err
@@ -350,7 +318,7 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 	if apiErr, ok := err.(*libErr.APIError); ok {
 		// Server errors (5xx) are treated as temporary and we fall back to cached value
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
-			c.logger.Warnf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
+			c.logger.Debugf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
 
 			// Use cached result if available
 			if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
@@ -384,7 +352,7 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 	// Handle connection errors by using the cached result if available
 	if libErr.IsConnectionError(err) {
 		if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
-			c.logger.Warnf("Using cached license validation due to connection error - error: %s", err.Error())
+			c.logger.Debugf("Using cached license validation due to connection error - error: %s", err.Error())
 			return *cachedResult, nil
 		}
 	}

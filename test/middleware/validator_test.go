@@ -45,7 +45,7 @@ func setupCommonMockExpectations(l *helper.MockLogger) {
 	l.On("Warnf", "Organization %s license expires in %d days", "test-org", 30).Maybe()
 	l.On("Warnf", "CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", "test-org", 5).Maybe()
 	l.On("Warnf", "License server error (5xx) detected, treating as valid - error: %s", "server error: 500").Maybe()
-	
+
 	// Allow error logs (added to support multi-org validation)
 	l.On("Error", mock.Anything).Maybe()
 	l.On("Error", "No organization IDs configured").Maybe()
@@ -201,11 +201,11 @@ func TestLicenseValidation(t *testing.T) {
 			if tt.expectError {
 				// For error cases, we expect a panic with a specific error message
 				assert.Panics(t, func() {
-					_, _ = client.Validate(context.Background())
+					_, _ = client.TestValidate(context.Background())
 				}, "Expected panic for license validation error")
 			} else {
 				// For success cases, verify the validation result
-				result, err := client.Validate(context.Background())
+				result, err := client.TestValidate(context.Background())
 				assert.NoError(t, err)
 
 				// Special case for server error test
@@ -294,7 +294,7 @@ func TestLicenseClient_Integration(t *testing.T) {
 
 	// Just check that the function doesn't panic
 	assert.NotPanics(t, func() {
-		result, err := client.Validate(context.Background())
+		result, err := client.TestValidate(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, result.Valid)
 		assert.Equal(t, 30, result.ExpiryDaysLeft)

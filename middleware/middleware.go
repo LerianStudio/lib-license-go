@@ -28,11 +28,6 @@ func NewLicenseClient(appID, licenseKey, orgIDs string, logger *log.Logger) *Lic
 		return nil
 	}
 
-	// Log mode information
-	if validator.IsGlobal {
-		validator.GetLogger().Infof("Initializing license client for global plugin")
-	}
-
 	return &LicenseClient{validator: validator}
 }
 
@@ -69,17 +64,15 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	l.Info("Validating global plugin license")
-
 	result, err := c.validator.ValidateWithOrgID(ctx, constant.GlobalPluginValue)
 	if err != nil {
-		l.Errorf("Global license validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed.Error())
-		panic(fmt.Sprintf("%s: %v", constant.ErrGlobalLicenseValidationFailed.Error(), err))
+		l.Errorf("License validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed.Error())
+		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseValidationFailed.Error(), "License validation failed"))
 	}
 
-	if !result.Valid && !result.ActiveGracePeriod && !result.IsTrial {
-		l.Errorf("Global license is invalid (code %s)", constant.ErrGlobalLicenseInvalid.Error())
-		panic(constant.ErrGlobalLicenseInvalid)
+	if !result.Valid && !result.ActiveGracePeriod {
+		l.Errorf("License is invalid (code %s)", constant.ErrGlobalLicenseInvalid.Error())
+		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseInvalid.Error(), "License is invalid"))
 	}
 
 	c.logLicenseStatus(result, constant.GlobalPluginValue)
@@ -90,13 +83,11 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	l.Info("Validating organization-specific licenses")
-
 	orgIDs := c.validator.GetOrganizationIDs()
 
 	if len(orgIDs) == 0 {
 		l.Errorf("No organization IDs configured (code %s)", constant.ErrNoOrganizationIDs.Error())
-		panic(constant.ErrNoOrganizationIDs)
+		panic(fmt.Sprintf("%s: %s", constant.ErrNoOrganizationIDs.Error(), "No organization IDs configured"))
 	}
 
 	validFound := false
@@ -104,11 +95,11 @@ func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	for _, orgID := range orgIDs {
 		res, err := c.validator.ValidateWithOrgID(ctx, orgID)
 		if err != nil {
-			l.Warnf("Validation for org %s failed: %v", orgID, err)
+			l.Warnf("Validation failed for org %s: %v", orgID, err)
 			continue
 		}
 
-		if res.Valid || res.ActiveGracePeriod || res.IsTrial {
+		if res.Valid || res.ActiveGracePeriod {
 			validFound = true
 
 			c.logLicenseStatus(res, orgID)
@@ -119,7 +110,7 @@ func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 
 	if !validFound {
 		l.Errorf("No valid licenses found (code %s)", constant.ErrNoValidLicenses.Error())
-		panic(constant.ErrNoValidLicenses)
+		panic(fmt.Sprintf("%s: %s", constant.ErrNoValidLicenses.Error(), "No valid licenses found for any organization"))
 	}
 }
 
@@ -138,7 +129,7 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 
 	orgID := ctx.Get(constant.OrganizationIDHeader)
 	if orgID == "" {
-		l.Warnf("Missing org header (code %s)", constant.ErrMissingOrgIDHeader.Error())
+		l.Errorf("Missing org header (code %s)", constant.ErrMissingOrgIDHeader.Error())
 
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrMissingOrgIDHeader.Error(),
@@ -148,7 +139,7 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 	}
 
 	if !util.ContainsOrganizationID(c.validator.GetOrganizationIDs(), orgID) {
-		l.Warnf("Unknown org ID %s", orgID)
+		l.Errorf("Unknown org ID %s", orgID)
 
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrMissingOrgIDHeader.Error(),
@@ -159,7 +150,7 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 
 	res, err := c.ValidateOrganization(ctx.Context(), orgID)
 	if err != nil {
-		l.Warnf("Validation failed for org %s: %v (code %s)", orgID, err, constant.ErrOrgLicenseValidationFail.Error())
+		l.Errorf("Validation failed for org %s: %v (code %s)", orgID, err, constant.ErrOrgLicenseValidationFail.Error())
 
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrOrgLicenseValidationFail.Error(),
@@ -168,8 +159,8 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 		})
 	}
 
-	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
-		l.Warnf("Org %s license invalid (code %s)", orgID, constant.ErrOrgLicenseInvalid.Error())
+	if !res.Valid && !res.ActiveGracePeriod {
+		l.Errorf("Org %s license invalid (code %s)", orgID, constant.ErrOrgLicenseInvalid.Error())
 
 		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"code":    constant.ErrOrgLicenseInvalid.Error(),
@@ -181,8 +172,8 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 	return ctx.Next()
 }
 
-// Validate checks if the license is valid across all organization IDs
-func (c *LicenseClient) Validate(ctx context.Context) (model.ValidationResult, error) {
+// TestValidate is a test function that validates the license
+func (c *LicenseClient) TestValidate(ctx context.Context) (model.ValidationResult, error) {
 	if c == nil || c.validator == nil {
 		return model.ValidationResult{}, fiber.ErrInternalServerError
 	}
@@ -210,8 +201,15 @@ func (c *LicenseClient) ValidateOrganization(ctx context.Context, orgID string) 
 // No need to duplicate logging logic here
 // Only log errors for invalid licenses not in grace period when not in grace period and not trial
 func (c *LicenseClient) logLicenseStatus(res model.ValidationResult, orgID string) {
-	if !res.Valid && !res.ActiveGracePeriod && !res.IsTrial {
+	if !res.Valid && !res.ActiveGracePeriod {
 		l := c.validator.GetLogger()
+
+		if res.IsTrial {
+			l.Errorf("LICENSE TRIAL: Organization %s has a expired trial license - application access will be denied", orgID)
+
+			return
+		}
+
 		l.Errorf("LICENSE INVALID: Organization %s has no valid license - application access will be denied", orgID)
 	}
 }

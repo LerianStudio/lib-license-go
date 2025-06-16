@@ -22,7 +22,7 @@ type Client struct {
 	config     *config.ClientConfig
 	logger     log.Logger
 	// IsGlobal indicates if this client is operating in global plugin mode
-	IsGlobal   bool
+	IsGlobal bool
 }
 
 // New creates a new API client
@@ -84,7 +84,7 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 
 	for _, orgID := range c.config.OrganizationIDs {
 		result, err := c.validateForOrganization(ctx, orgID)
-		if err == nil && (result.Valid || result.ActiveGracePeriod || result.IsTrial) {
+		if err == nil && (result.Valid || result.ActiveGracePeriod) {
 			// If any organization has a valid license, return success
 			return result, nil
 		}
@@ -100,18 +100,11 @@ func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, e
 func (c *Client) validateForOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
 	url := fmt.Sprintf("%s/licenses/validate", baseURL)
 
-	// Use global plugin value if in global mode
-	validationOrgID := orgID
-	if c.IsGlobal {
-		validationOrgID = cn.GlobalPluginValue
-		c.logger.Debugf("Global plugin mode: using global ID (%s) for validation instead of %s", cn.GlobalPluginValue, orgID)
-	}
-
 	// Request body with application name, organization ID, and license key
 	reqBody := map[string]string{
 		"resourceName":   c.config.AppName,
 		"licenseKey":     c.config.LicenseKey,
-		"organizationId": validationOrgID,
+		"organizationId": orgID,
 	}
 
 	body, err := json.Marshal(reqBody)
