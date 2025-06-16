@@ -378,19 +378,23 @@ func (c *Client) getOrgIDForLogging() string {
 
 // logTrialLicense handles logging for trial licenses
 func (c *Client) logTrialLicense(orgID string, expiryDays int) {
-	messagePrefix := "TRIAL LICENSE"
+	messagePrefix := fmt.Sprintf("TRIAL LICENSE: Organization %s", orgID)
 	messageSuffix := "Please upgrade to a full license to continue using the application"
+
+	if c.IsGlobal {
+		messagePrefix = "TRIAL LICENSE: Application"
+	}
 
 	switch {
 	case expiryDays == cn.DefaultLicenseExpiredDays:
 		// Trial license expires today
-		c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
+		c.logger.Warnf("%s trial expires today. %s", messagePrefix, messageSuffix)
 	case expiryDays <= cn.DefaultTrialExpiryDaysToWarn:
 		// Trial license is about to expire soon
-		c.logger.Warnf("%s: Organization %s trial expires in %d days. %s", messagePrefix, orgID, expiryDays, messageSuffix)
+		c.logger.Warnf("%s trial expires in %d days. %s", messagePrefix, expiryDays, messageSuffix)
 	default:
 		// General trial notice
-		c.logger.Infof("%s: Organization %s is using a trial license that expires in %d days", messagePrefix, orgID, expiryDays)
+		c.logger.Infof("%s is using a trial license that expires in %d days", messagePrefix, expiryDays)
 	}
 }
 

@@ -1,9 +1,8 @@
 package cache
 
 import (
-	"time"
-
 	"github.com/LerianStudio/lib-commons/commons/log"
+	"github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/dgraph-io/ristretto"
 )
@@ -18,9 +17,9 @@ type Manager struct {
 // New creates a new cache manager
 func New(logger log.Logger) (*Manager, error) {
 	cache, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: 1e7,     // number of keys to track frequency of (10M)
-		MaxCost:     1 << 20, // maximum cost of cache (1MB)
-		BufferItems: 64,      // number of keys per Get buffer
+		NumCounters: constant.CacheNumCounters,
+		MaxCost:     constant.CacheMaxCost,
+		BufferItems: constant.CacheBufferItems,
 	})
 	if err != nil {
 		return nil, err
@@ -48,7 +47,7 @@ func (m *Manager) Get(orgID string) (model.ValidationResult, bool) {
 // Store caches a validation result with a fixed TTL
 func (m *Manager) Store(orgID string, result model.ValidationResult) {
 	// Store with a fixed TTL for security (ensure regular re-validation)
-	m.cache.SetWithTTL(orgID, result, 1, 24*time.Hour)
+	m.cache.SetWithTTL(orgID, result, 1, constant.CacheTTL)
 
 	// Keep a backup copy for fallback in case of server errors
 	resultCopy := result
