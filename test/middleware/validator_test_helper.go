@@ -161,10 +161,10 @@ func RunTestCases(t *testing.T, testCases []TestCase) {
 
 			if tc.ExpectedPanic {
 				assert.Panics(t, func() {
-					_, _ = client.Validate(context.Background())
+					_, _ = client.TestValidate(context.Background())
 				})
 			} else {
-				result, err := client.Validate(context.Background())
+				result, err := client.TestValidate(context.Background())
 				require.NoError(t, err)
 
 				// Assert the validation result

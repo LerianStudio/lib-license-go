@@ -45,7 +45,7 @@ func setupCommonMockExpectations(l *helper.MockLogger) {
 	l.On("Warnf", "Organization %s license expires in %d days", "test-org", 30).Maybe()
 	l.On("Warnf", "CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", "test-org", 5).Maybe()
 	l.On("Warnf", "License server error (5xx) detected, treating as valid - error: %s", "server error: 500").Maybe()
-	
+
 	// Allow error logs (added to support multi-org validation)
 	l.On("Error", mock.Anything).Maybe()
 	l.On("Error", "No organization IDs configured").Maybe()
@@ -156,7 +156,7 @@ func TestLicenseValidation(t *testing.T) {
 			},
 			expectError:   false,
 			expectedValid: true, // When server error occurs, fallback to valid license with grace period
-			expectedDays:  0,
+			expectedDays:  7,
 			testCase: TestCase{
 				Name: "Server error",
 				SetupServer: func(t *testing.T) *httptest.Server {
@@ -165,7 +165,7 @@ func TestLicenseValidation(t *testing.T) {
 					}))
 				},
 				ExpectedValid: true,
-				ExpectedDays:  0,
+				ExpectedDays:  7,
 			},
 		},
 	}
@@ -201,11 +201,11 @@ func TestLicenseValidation(t *testing.T) {
 			if tt.expectError {
 				// For error cases, we expect a panic with a specific error message
 				assert.Panics(t, func() {
-					_, _ = client.Validate(context.Background())
+					_, _ = client.TestValidate(context.Background())
 				}, "Expected panic for license validation error")
 			} else {
 				// For success cases, verify the validation result
-				result, err := client.Validate(context.Background())
+				result, err := client.TestValidate(context.Background())
 				assert.NoError(t, err)
 
 				// Special case for server error test
@@ -294,7 +294,7 @@ func TestLicenseClient_Integration(t *testing.T) {
 
 	// Just check that the function doesn't panic
 	assert.NotPanics(t, func() {
-		result, err := client.Validate(context.Background())
+		result, err := client.TestValidate(context.Background())
 		assert.NoError(t, err)
 		assert.True(t, result.Valid)
 		assert.Equal(t, 30, result.ExpiryDaysLeft)
