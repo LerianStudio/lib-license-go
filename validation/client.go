@@ -378,22 +378,26 @@ func (c *Client) getOrgIDForLogging() string {
 
 // logTrialLicense handles logging for trial licenses
 func (c *Client) logTrialLicense(orgID string, expiryDays int) {
-	messagePrefix := "TRIAL LICENSE"
+	messagePrefix := fmt.Sprintf("TRIAL LICENSE: Organization %s", orgID)
 	messageSuffix := "Please upgrade to a full license to continue using the application"
 
 	// Convert days to hours for comparison with hour-based constants
 	expiryHours := expiryDays * 24
 
+	if c.IsGlobal {
+		messagePrefix = "TRIAL LICENSE: Application"
+	}
+
 	switch {
 	case expiryHours == cn.DefaultLicenseExpiredHours:
 		// Trial license expires today
-		c.logger.Warnf("%s: Organization %s trial expires today. %s", messagePrefix, orgID, messageSuffix)
+		c.logger.Warnf("%s trial expires today. %s", messagePrefix, messageSuffix)
 	case expiryHours <= cn.DefaultTrialExpiryHoursToWarn:
 		// Trial license is about to expire soon
-		c.logger.Warnf("%s: Organization %s trial expires in %d hours. %s", messagePrefix, orgID, expiryHours, messageSuffix)
+		c.logger.Warnf("%s trial expires in %d hours. %s", messagePrefix, expiryHours, messageSuffix)
 	default:
 		// General trial notice
-		c.logger.Infof("%s: Organization %s is using a trial license that expires in %d hours", messagePrefix, orgID, expiryHours)
+		c.logger.Infof("%s is using a trial license that expires in %d hours", messagePrefix, expiryHours)
 	}
 }
 
@@ -405,10 +409,10 @@ func (c *Client) logValidLicense(orgID string, expiryDays int) {
 	switch {
 	case expiryHours <= cn.DefaultMinExpiryHoursToUrgentWarn:
 		// License valid and within urgent warning threshold
-		c.logger.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, expiryDays)
+		c.logger.Warnf("WARNING: Organization %s license expires in %d hours. Contact your account manager to renew", orgID, expiryHours)
 	case expiryHours <= cn.DefaultMinExpiryHoursToNormalWarn:
 		// License valid but approaching expiration
-		c.logger.Warnf("Organization %s license expires in %d days", orgID, expiryDays)
+		c.logger.Warnf("Organization %s license expires in %d hours", orgID, expiryHours)
 	default:
 		// General valid license message
 		c.logger.Infof("Organization %s has a valid license", orgID)
@@ -422,10 +426,10 @@ func (c *Client) logGracePeriod(orgID string, expiryDays int) {
 
 	if expiryHours <= cn.DefaultGraceExpiryHoursToCriticalWarn {
 		// Grace period is about to expire
-		c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, expiryDays)
+		c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d hours - application will terminate. Contact support immediately to renew license", orgID, expiryHours)
 	} else {
 		// General grace period warning
-		c.logger.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more days", orgID, expiryDays)
+		c.logger.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more hours", orgID, expiryHours)
 	}
 }
 
