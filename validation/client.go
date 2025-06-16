@@ -140,9 +140,10 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 
 // validateMultipleOrganizations performs validation for multiple organization IDs
 func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []string) (model.ValidationResult, error) {
-	// Track if at least one organization has a valid license
-	var anyValid bool
+	var anyOrgLicenseValid bool
+
 	var lastValidResult model.ValidationResult
+
 	var allOrgErrors []error
 
 	// Process each organization ID to validate licenses
@@ -165,7 +166,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 			}
 
 			// Mark as valid
-			anyValid = true
+			anyOrgLicenseValid = true
 			lastValidResult = tempResult
 
 			continue
@@ -173,7 +174,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 
 		if err == nil && (result.Valid || result.ActiveGracePeriod) {
 			// If this organization has a valid license, we're good
-			anyValid = true
+			anyOrgLicenseValid = true
 			lastValidResult = result
 
 			c.logValidResult(result)
@@ -198,7 +199,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 	}
 
 	// If no valid organizations, terminate the application
-	if !anyValid {
+	if !anyOrgLicenseValid {
 		c.refreshManager.Shutdown()
 
 		// Construct a comprehensive error message with all validation errors
