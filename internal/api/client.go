@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/LerianStudio/lib-commons/commons"
 	"github.com/LerianStudio/lib-commons/commons/log"
 	cn "github.com/LerianStudio/lib-license-go/constant"
 	libErr "github.com/LerianStudio/lib-license-go/error"
@@ -72,28 +73,19 @@ func getBaseURLFromEnvOrDefault() string {
 	return cn.ProdLicenseGatewayBaseURL
 }
 
-// ValidateLicense performs the license validation API call for a specific organization ID
-func (c *Client) ValidateLicense(ctx context.Context) (model.ValidationResult, error) {
-	// If no organization IDs are configured, return an error
-	if len(c.config.OrganizationIDs) == 0 {
-		return model.ValidationResult{}, fmt.Errorf("no organization IDs configured")
+// ValidateOrganization validates the license with the provided organization ID
+// Returns the first successful validation result or the last error encountered
+func (c *Client) ValidateOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
+	if commons.IsNilOrEmpty(&orgID) {
+		return model.ValidationResult{}, fmt.Errorf("no organization ID provided")
 	}
 
-	// Try to validate with each organization ID
-	var lastErr error
-
-	for _, orgID := range c.config.OrganizationIDs {
-		result, err := c.validateForOrganization(ctx, orgID)
-		if err == nil && (result.Valid || result.ActiveGracePeriod) {
-			// If any organization has a valid license, return success
-			return result, nil
-		}
-
-		lastErr = err
+	result, err := c.validateForOrganization(ctx, orgID)
+	if err != nil {
+		return model.ValidationResult{}, err
 	}
 
-	// If we reach here, no valid license was found
-	return model.ValidationResult{}, lastErr
+	return result, nil
 }
 
 // validateForOrganization performs the license validation API call for a specific organization ID

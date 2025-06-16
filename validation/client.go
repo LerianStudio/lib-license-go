@@ -33,6 +33,8 @@ type Client struct {
 	IsGlobal bool
 }
 
+// This method has been moved to the end of the file
+
 // New creates a new license validation client
 func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) {
 	// Initialize logger
@@ -100,8 +102,8 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	return client, nil
 }
 
-// Validate checks if the license is valid with caching for all configured organizations
-func (c *Client) Validate(ctx context.Context) (model.ValidationResult, error) {
+// TestValidate is a test function that checks if the license is valid with caching for all configured organizations
+func (c *Client) TestValidate(ctx context.Context) (model.ValidationResult, error) {
 	// Perform initial validation for all organization IDs
 	// This is used during application startup to ensure at least one organization has a valid license
 	return c.validateAllOrganizations(ctx)
@@ -129,27 +131,30 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 
 	// Special handling for global plugin mode
 	if c.IsGlobal {
-		result, err := c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
-
-		return result, err
+		return c.validateSingleOrganization(ctx, cn.GlobalPluginValue)
 	}
 
+	// Process all organization IDs at once
+	return c.validateMultipleOrganizations(ctx, c.config.OrganizationIDs)
+}
+
+// validateMultipleOrganizations performs validation for multiple organization IDs
+func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []string) (model.ValidationResult, error) {
 	// Track if at least one organization has a valid license
 	var anyValid bool
-
 	var lastValidResult model.ValidationResult
-	// We'll collect all errors, but don't need lastErr since we're using allOrgErrors
 	var allOrgErrors []error
 
-	// Validate each organization ID
-	for _, orgID := range c.config.OrganizationIDs {
-		// Use performAPIValidation to validate just this organization ID directly
-		// We bypass error handling to collect all errors before making a decision
-		result, err := c.performAPIValidation(ctx, orgID)
+	// Process each organization ID to validate licenses
+	// We still need to iterate through orgIDs for proper error handling and caching
+	// but we're no longer creating temporary API clients for each org
+	for _, orgID := range orgIDs {
+		// Use the API client directly with this organization ID
+		result, err := c.apiClient.ValidateOrganization(ctx, orgID)
 
 		// Check if this is a server error (5xx) which should be treated as valid with grace period
 		if apiErr, ok := err.(*libErr.APIError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
-			c.logger.Warnf("License server error (5xx) detected for organization %s, treating as valid - error: %s",
+			c.logger.Debugf("License server error (5xx) detected for organization %s, treating as valid - error: %s",
 				orgID, apiErr.Error())
 
 			// Create a temporary valid license result
@@ -158,9 +163,6 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 				ExpiryDaysLeft:    cn.FallbackExpiryDaysLeft,
 				ActiveGracePeriod: true,
 			}
-
-			// Store this result in cache
-			c.cacheManager.Store(orgID, tempResult)
 
 			// Mark as valid
 			anyValid = true
@@ -173,6 +175,7 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 			// If this organization has a valid license, we're good
 			anyValid = true
 			lastValidResult = result
+
 			c.logValidResult(result)
 			c.cacheManager.Store(orgID, result)
 		} else {
@@ -181,13 +184,15 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 
 				// For APIErrors, we want to log appropriately but not terminate
 				if apiErr, ok := err.(*libErr.APIError); ok {
-					c.logger.Warnf("Organization %s license validation failed with status code %d: %v",
+					c.logger.Debugf("Organization %s license validation failed with status code %d: %v",
 						orgID, apiErr.StatusCode, apiErr.Error())
 				} else {
-					c.logger.Warnf("Organization %s has invalid license: %v", orgID, err)
+					c.logger.Debugf("Organization %s has invalid license: %v", orgID, err)
 				}
 			} else {
-				c.logger.Warnf("Organization %s has invalid license status", orgID)
+				c.logger.Debugf("Organization %s has invalid license status", orgID)
+
+				allOrgErrors = append(allOrgErrors, fmt.Errorf("org %s: invalid license", orgID))
 			}
 		}
 	}
@@ -221,8 +226,8 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 // validateSingleOrganization performs validation for a specific organization ID
 // and handles the result (caching, logging, error handling)
 func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Validate for this single org
-	result, err := c.performAPIValidation(ctx, orgID)
+	// Validate for this single org using the variadic performAPIValidation
+	result, err := c.apiClient.ValidateOrganization(ctx, orgID)
 	if err != nil {
 		// Handle errors according to type
 		return c.handleAPIError(err)
@@ -233,25 +238,6 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 	c.cacheManager.Store(orgID, result)
 
 	return result, nil
-}
-
-// performAPIValidation makes the actual API request to validate a license for a single organization ID
-// This is a low-level function that only performs the API call without handling the result
-func (c *Client) performAPIValidation(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	// Create a temporary config with just this organization ID
-	tempConfig := &config.ClientConfig{
-		AppName:         c.config.AppName,
-		LicenseKey:      c.config.LicenseKey,
-		OrganizationIDs: []string{orgID},
-		HTTPTimeout:     c.config.HTTPTimeout,
-		RefreshInterval: c.config.RefreshInterval,
-	}
-
-	// Create a temporary API client with the single org config
-	tempClient := api.New(tempConfig, c.apiClient.GetHTTPClient(), c.logger)
-
-	// Perform validation using the temporary client
-	return tempClient.ValidateLicense(ctx)
 }
 
 // ValidateWithRetry implements refresh.Validator interface

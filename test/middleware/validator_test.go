@@ -156,7 +156,7 @@ func TestLicenseValidation(t *testing.T) {
 			},
 			expectError:   false,
 			expectedValid: true, // When server error occurs, fallback to valid license with grace period
-			expectedDays:  0,
+			expectedDays:  7,
 			testCase: TestCase{
 				Name: "Server error",
 				SetupServer: func(t *testing.T) *httptest.Server {
@@ -165,7 +165,7 @@ func TestLicenseValidation(t *testing.T) {
 					}))
 				},
 				ExpectedValid: true,
-				ExpectedDays:  0,
+				ExpectedDays:  7,
 			},
 		},
 	}

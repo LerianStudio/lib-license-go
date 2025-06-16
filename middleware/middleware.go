@@ -178,7 +178,7 @@ func (c *LicenseClient) TestValidate(ctx context.Context) (model.ValidationResul
 		return model.ValidationResult{}, fiber.ErrInternalServerError
 	}
 
-	return c.validator.Validate(ctx)
+	return c.validator.TestValidate(ctx)
 }
 
 // ValidateOrganization checks if the license is valid for a specific organization ID
