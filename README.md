@@ -104,8 +104,6 @@ func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opente
 }
 
 func (s *Server) Run(l *commons.Launcher) error {
-	s.logger.Info("Starting server with graceful shutdown support")
-
 	shutdown.StartServerWithGracefulShutdown(
 		s.app,
 		s.license,

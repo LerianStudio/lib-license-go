@@ -53,18 +53,18 @@ func (m *Manager) Start(ctx context.Context) {
 	ticker := time.NewTicker(m.refreshInterval)
 
 	go func() {
-		m.logger.Info("Starting background license refresh")
+		m.logger.Debug("Starting background license refresh")
 
 		for {
 			select {
 			case <-refreshCtx.Done():
 				ticker.Stop()
-				m.logger.Info("Background license refresh stopped")
+				m.logger.Debug("Background license refresh stopped")
 
 				return
 
 			case <-ticker.C:
-				m.logger.Info("Running scheduled license validation")
+				m.logger.Debug("Running scheduled license validation")
 				m.attemptValidation(refreshCtx)
 			}
 		}
@@ -86,7 +86,7 @@ func (m *Manager) Shutdown() {
 	}
 
 	m.started = false
-	m.logger.Info("Background license refresh shutdown complete")
+	m.logger.Debug("Background license refresh shutdown complete")
 }
 
 // attemptValidation performs a validation with retry logic
@@ -95,7 +95,7 @@ func (m *Manager) attemptValidation(ctx context.Context) {
 	m.lastAttemptedRefresh = time.Now()
 	m.mu.Unlock()
 
-	m.logger.Info("Attempting license validation with retry")
+	m.logger.Debug("Attempting license validation with retry")
 
 	err := m.validator.ValidateWithRetry(ctx)
 	if err == nil {
