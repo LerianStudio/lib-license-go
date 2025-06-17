@@ -1,3 +1,10 @@
+## [1.17.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.16.0...v1.17.0-beta.1) (2025-06-17)
+
+
+### Bug Fixes
+
+* remove redundant cache in validation retry ([f7bb88d](https://github.com/LerianStudio/lib-license-go/commit/f7bb88d8cea1ba39da665ea1eb6eb3cdfaf592f6))
+
 ## [1.16.0](https://github.com/LerianStudio/lib-license-go/compare/v1.15.0...v1.16.0) (2025-06-17)
 
 ## [1.16.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.15.0...v1.16.0-beta.1) (2025-06-17)
