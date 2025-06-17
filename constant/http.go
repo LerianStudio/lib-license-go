@@ -10,6 +10,6 @@ const (
 const (
 	// DefaultHTTPTimeoutSeconds is the default HTTP client timeout in seconds
 	DefaultHTTPTimeoutSeconds = 5
-	// DefaultRefreshIntervalHours is the default license refresh interval in hours
-	DefaultRefreshIntervalHours = 2
+	// DefaultRefreshIntervalMinutes is the default license refresh interval in minutes
+	DefaultRefreshIntervalMinutes = 30
 )
