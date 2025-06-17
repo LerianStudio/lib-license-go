@@ -106,11 +106,11 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 func (c *Client) TestValidate(ctx context.Context) (model.ValidationResult, error) {
 	// Perform initial validation for all organization IDs
 	// This is used during application startup to ensure at least one organization has a valid license
-	return c.validateAllOrganizations(ctx)
+	return c.ValidateAllOrganizations(ctx)
 }
 
-// ValidateWithOrgID validates a license for a specific organization ID with caching
-func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.ValidationResult, error) {
+// ValidateOrganizationWithCache validates a license for a specific organization ID with caching
+func (c *Client) ValidateOrganizationWithCache(ctx context.Context, orgID string) (model.ValidationResult, error) {
 	// Check if the organization ID is already in the cache
 	if result, found := c.cacheManager.Get(orgID); found {
 		return result, nil
@@ -120,10 +120,10 @@ func (c *Client) ValidateWithOrgID(ctx context.Context, orgID string) (model.Val
 	return c.validateSingleOrganization(ctx, orgID)
 }
 
-// validateAllOrganizations performs validation for all organization IDs
+// ValidateAllOrganizations performs validation for all organization IDs
 // At least one organization must have a valid license for the application to continue.
 // This function collects all validation errors but will not terminate unless all validations fail.
-func (c *Client) validateAllOrganizations(ctx context.Context) (model.ValidationResult, error) {
+func (c *Client) ValidateAllOrganizations(ctx context.Context) (model.ValidationResult, error) {
 	// If no organization IDs are configured, return an error
 	if len(c.config.OrganizationIDs) == 0 {
 		return model.ValidationResult{}, cn.ErrNoOrganizationIDs
@@ -140,7 +140,7 @@ func (c *Client) validateAllOrganizations(ctx context.Context) (model.Validation
 
 // validateMultipleOrganizations performs validation for multiple organization IDs
 func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []string) (model.ValidationResult, error) {
-	var anyOrgLicenseValid bool
+	var validFound bool
 
 	var lastValidResult model.ValidationResult
 
@@ -166,7 +166,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 			}
 
 			// Mark as valid
-			anyOrgLicenseValid = true
+			validFound = true
 			lastValidResult = tempResult
 
 			continue
@@ -174,7 +174,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 
 		if err == nil && (result.Valid || result.ActiveGracePeriod) {
 			// If this organization has a valid license, we're good
-			anyOrgLicenseValid = true
+			validFound = true
 			lastValidResult = result
 
 			c.logValidResult(orgID, result)
@@ -198,9 +198,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 	}
 
 	// If no valid organizations, terminate the application
-	if !anyOrgLicenseValid {
-		c.refreshManager.Shutdown()
-
+	if !validFound {
 		// Construct a comprehensive error message with all validation errors
 		var errMsg string
 
@@ -215,9 +213,8 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 			errMsg = "No valid licenses found for any configured organization"
 		}
 
-		c.shutdownManager.Terminate(errMsg)
-
-		return model.ValidationResult{}, errors.New(errMsg)
+		c.logger.Errorf("Exiting: %s: %s", cn.ErrNoValidLicenses.Error(), errMsg)
+		panic(fmt.Sprintf("%s: %s", cn.ErrNoValidLicenses.Error(), errMsg))
 	}
 
 	return lastValidResult, nil
@@ -255,7 +252,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 
 		var err error
 
-		_, err = c.validateAllOrganizations(timeoutCtx)
+		_, err = c.ValidateAllOrganizations(timeoutCtx)
 
 		// Always cancel the timeout context when done with this attempt
 		cancel()
@@ -330,8 +327,7 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 
 			// For single org validation, terminate as before
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
-			c.refreshManager.Shutdown()
-			c.shutdownManager.Terminate("License validation failed with client error: " + apiErr.Error())
+			panic(fmt.Sprintf("%s: %s", cn.ErrGlobalLicenseValidationFailed.Error(), "License validation failed with client error: "+apiErr.Error()))
 		}
 	}
 
