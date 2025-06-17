@@ -177,7 +177,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 			anyOrgLicenseValid = true
 			lastValidResult = result
 
-			c.logValidResult(result)
+			c.logValidResult(orgID, result)
 			c.cacheManager.Store(orgID, result)
 		} else {
 			if err != nil {
@@ -235,7 +235,7 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 	}
 
 	// Successful validation
-	c.logValidResult(result)
+	c.logValidResult(orgID, result)
 	c.cacheManager.Store(orgID, result)
 
 	return result, nil
@@ -349,10 +349,7 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 }
 
 // logValidResult handles a valid license response
-func (c *Client) logValidResult(res model.ValidationResult) {
-	// Get organization ID from the client config
-	orgID := c.getOrgIDForLogging()
-
+func (c *Client) logValidResult(orgID string, res model.ValidationResult) {
 	// Handle different license states
 	switch {
 	case res.Valid && res.IsTrial:
@@ -365,15 +362,6 @@ func (c *Client) logValidResult(res model.ValidationResult) {
 	if res.ActiveGracePeriod {
 		c.logGracePeriod(orgID, res.ExpiryDaysLeft)
 	}
-}
-
-// getOrgIDForLogging safely extracts the organization ID for logging purposes
-func (c *Client) getOrgIDForLogging() string {
-	if len(c.config.OrganizationIDs) > 0 {
-		return c.config.OrganizationIDs[0]
-	}
-
-	return "unknown"
 }
 
 // logTrialLicense handles logging for trial licenses
