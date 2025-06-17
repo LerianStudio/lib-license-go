@@ -64,7 +64,7 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	result, err := c.validator.ValidateWithOrgID(ctx, constant.GlobalPluginValue)
+	result, err := c.validator.ValidateOrganizationWithCache(ctx, constant.GlobalPluginValue)
 	if err != nil {
 		l.Errorf("License validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed.Error())
 		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseValidationFailed.Error(), "License validation failed"))
@@ -72,7 +72,7 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 
 	if !result.Valid && !result.ActiveGracePeriod {
 		l.Errorf("License is invalid (code %s)", constant.ErrGlobalLicenseInvalid.Error())
-		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseInvalid.Error(), "License is invalid"))
+		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseInvalid.Error(), "No valid license found"))
 	}
 
 	c.logLicenseStatus(result, constant.GlobalPluginValue)
@@ -83,32 +83,9 @@ func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	orgIDs := c.validator.GetOrganizationIDs()
-
-	if len(orgIDs) == 0 {
-		l.Errorf("No organization IDs configured (code %s)", constant.ErrNoOrganizationIDs.Error())
-		panic(fmt.Sprintf("%s: %s", constant.ErrNoOrganizationIDs.Error(), "No organization IDs configured"))
-	}
-
-	validFound := false
-
-	for _, orgID := range orgIDs {
-		res, err := c.validator.ValidateWithOrgID(ctx, orgID)
-		if err != nil {
-			continue
-		}
-
-		if res.Valid || res.ActiveGracePeriod {
-			validFound = true
-
-			c.logLicenseStatus(res, orgID)
-		} else {
-			l.Warnf("Invalid license for org %s", orgID)
-		}
-	}
-
-	if !validFound {
-		l.Errorf("No valid licenses found (code %s)", constant.ErrNoValidLicenses.Error())
+	_, err := c.validator.ValidateAllOrganizations(ctx)
+	if err != nil {
+		l.Debugf("error in validateMultiOrgLicensesOnStartup: %v", err)
 		panic(fmt.Sprintf("%s: %s", constant.ErrNoValidLicenses.Error(), "No valid licenses found for any organization"))
 	}
 }
@@ -147,7 +124,7 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 		})
 	}
 
-	res, err := c.ValidateOrganization(ctx.Context(), orgID)
+	res, err := c.validator.ValidateOrganizationWithCache(ctx.Context(), orgID)
 	if err != nil {
 		l.Errorf("Validation failed for org %s: %v (code %s)", orgID, err, constant.ErrOrgLicenseValidationFail.Error())
 
@@ -178,17 +155,6 @@ func (c *LicenseClient) TestValidate(ctx context.Context) (model.ValidationResul
 	}
 
 	return c.validator.TestValidate(ctx)
-}
-
-// ValidateOrganization checks if the license is valid for a specific organization ID
-// This is used to validate a specific organization ID from the request header
-func (c *LicenseClient) ValidateOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	if c == nil || c.validator == nil {
-		return model.ValidationResult{}, fiber.ErrInternalServerError
-	}
-
-	// Ensure we're sending the exact organization ID to the backend validation API
-	return c.validator.ValidateWithOrgID(ctx, orgID)
 }
 
 // logLicenseStatus delegates license status logging to the validation client
