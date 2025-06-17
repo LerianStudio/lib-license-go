@@ -183,6 +183,9 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 			if err != nil {
 				allOrgErrors = append(allOrgErrors, fmt.Errorf("org %s: %w", orgID, err))
 
+				c.logger.Warnf("Validation failed for org %s", orgID)
+				c.logger.Debugf("error: %v", err)
+
 				// For APIErrors, we want to log appropriately but not terminate
 				if apiErr, ok := err.(*libErr.APIError); ok {
 					c.logger.Debugf("Organization %s license validation failed with status code %d: %v",
@@ -190,10 +193,6 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 				} else {
 					c.logger.Debugf("Organization %s has invalid license: %v", orgID, err)
 				}
-			} else {
-				c.logger.Debugf("Organization %s has invalid license status", orgID)
-
-				allOrgErrors = append(allOrgErrors, fmt.Errorf("org %s: invalid license", orgID))
 			}
 		}
 	}
