@@ -9,9 +9,8 @@ import (
 
 // Manager handles caching of license validation results
 type Manager struct {
-	cache       *ristretto.Cache
-	logger      log.Logger
-	cachedValue *model.ValidationResult // Backup for recovery
+	cache  *ristretto.Cache
+	logger log.Logger
 }
 
 // New creates a new cache manager
@@ -49,15 +48,8 @@ func (m *Manager) Store(orgID string, result model.ValidationResult) {
 	// Store with a fixed TTL for security (ensure regular re-validation)
 	m.cache.SetWithTTL(orgID, result, 1, constant.CacheTTL)
 
-	// Keep a backup copy for fallback in case of server errors
-	resultCopy := result
-	m.cachedValue = &resultCopy
-
 	// Log the cached result with a simpler format for test compatibility
 	m.logger.Debugf("Stored license validation for org %s", orgID)
 }
 
-// GetLastResult returns the last successfully cached result (for fallback)
-func (m *Manager) GetLastResult() *model.ValidationResult {
-	return m.cachedValue
-}
+

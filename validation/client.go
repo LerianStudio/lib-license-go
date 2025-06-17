@@ -227,7 +227,7 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 	result, err := c.apiClient.ValidateOrganization(ctx, orgID)
 	if err != nil {
 		// Handle errors according to type
-		return c.handleAPIError(err)
+		return c.handleAPIError(orgID, err)
 	}
 
 	// Successful validation
@@ -296,16 +296,17 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 
 // handleAPIError handles all API error cases
 // This is called for single organization validation (not from validateAndHandleAllOrgs)
-func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
+func (c *Client) handleAPIError(orgID string, err error) (model.ValidationResult, error) {
 	// Handle APIErrors specially
 	if apiErr, ok := err.(*libErr.APIError); ok {
 		// Server errors (5xx) are treated as temporary and we fall back to cached value
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			c.logger.Debugf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
 
-			// Use cached result if available
-			if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
-				return *cachedResult, nil
+			// Try to get any cached result for this org ID
+			if result, found := c.cacheManager.Get(orgID); found {
+				c.logger.Debugf("Using cached license validation for org %s due to server error", orgID)
+				return result, nil
 			}
 
 			// No cached result, return a temporary valid license
@@ -333,9 +334,9 @@ func (c *Client) handleAPIError(err error) (model.ValidationResult, error) {
 
 	// Handle connection errors by using the cached result if available
 	if libErr.IsConnectionError(err) {
-		if cachedResult := c.cacheManager.GetLastResult(); cachedResult != nil {
-			c.logger.Debugf("Using cached license validation due to connection error - error: %s", err.Error())
-			return *cachedResult, nil
+		if result, found := c.cacheManager.Get(orgID); found {
+			c.logger.Debugf("Using cached license validation for org %s due to connection error: %s", orgID, err.Error())
+			return result, nil
 		}
 	}
 
