@@ -5,7 +5,7 @@ import "time"
 // Cache configuration constants
 const (
 	// CacheTTL defines the time-to-live for cached validation results
-	CacheTTL = 30 * time.Minute
+	CacheTTL = 20 * time.Minute
 	// CacheNumCounters is the number of keys to track frequency (10M)
 	CacheNumCounters = 1e7
 	// CacheMaxCost is the maximum cost of cache (1MB)
