@@ -11,5 +11,6 @@ type ValidationResult struct {
 // ErrorResponse contains error information returned by the license API
 type ErrorResponse struct {
 	Code    string `json:"code"`
+	Title   string `json:"title"`
 	Message string `json:"message"`
 }

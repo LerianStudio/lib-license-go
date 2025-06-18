@@ -1,20 +1,49 @@
-// Package liberr provides error-related utilities for license validation
-package liberr
+package http
 
 import (
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/LerianStudio/lib-commons/commons"
+	commonsHttp "github.com/LerianStudio/lib-commons/commons/net/http"
+	"github.com/LerianStudio/lib-license-go/pkg"
+	"github.com/gofiber/fiber/v2"
 )
 
-// APIError propagates HTTP status codes for strict error handling in Validate.
-type APIError struct {
-	StatusCode int
-	Msg        string
-}
+// WithError returns an error with the given status code and message.
+func WithError(c *fiber.Ctx, err error) error {
+	switch e := err.(type) {
+	case pkg.EntityNotFoundError:
+		return commonsHttp.NotFound(c, e.Code, e.Title, e.Message)
+	case pkg.EntityConflictError:
+		return commonsHttp.Conflict(c, e.Code, e.Title, e.Message)
+	case pkg.ValidationError:
+		return commonsHttp.BadRequest(c, pkg.ValidationKnownFieldsError{
+			Code:    e.Code,
+			Title:   e.Title,
+			Message: e.Message,
+			Fields:  nil,
+		})
+	case pkg.UnprocessableOperationError:
+		return commonsHttp.UnprocessableEntity(c, e.Code, e.Title, e.Message)
+	case pkg.UnauthorizedError:
+		return commonsHttp.Unauthorized(c, e.Code, e.Title, e.Message)
+	case pkg.ForbiddenError:
+		return commonsHttp.Forbidden(c, e.Code, e.Title, e.Message)
+	case pkg.ValidationKnownFieldsError, pkg.ValidationUnknownFieldsError:
+		return commonsHttp.BadRequest(c, e)
+	case pkg.ResponseError:
+		var rErr commons.Response
+		_ = errors.As(err, &rErr)
 
-func (e *APIError) Error() string {
-	return e.Msg
+		return commonsHttp.JSONResponseError(c, rErr)
+	default:
+		var iErr pkg.InternalServerError
+		_ = errors.As(pkg.ValidateInternalError(err, ""), &iErr)
+
+		return commonsHttp.InternalServerError(c, iErr.Code, iErr.Title, iErr.Message)
+	}
 }
 
 // IsConnectionError checks if an error is likely related to network connectivity

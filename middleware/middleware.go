@@ -7,9 +7,10 @@ import (
 
 	"github.com/LerianStudio/lib-commons/commons/log"
 	"github.com/LerianStudio/lib-commons/commons/shutdown"
-	"github.com/LerianStudio/lib-license-go/constant"
+	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/model"
-	"github.com/LerianStudio/lib-license-go/util"
+	"github.com/LerianStudio/lib-license-go/pkg"
+	pkgHTTP "github.com/LerianStudio/lib-license-go/pkg/net/http"
 	"github.com/LerianStudio/lib-license-go/validation"
 	"github.com/gofiber/fiber/v2"
 )
@@ -64,18 +65,18 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 func (c *LicenseClient) validateGlobalLicenseOnStartup(ctx context.Context) {
 	l := c.validator.GetLogger()
 
-	result, err := c.validator.ValidateOrganizationWithCache(ctx, constant.GlobalPluginValue)
+	result, err := c.validator.ValidateOrganizationWithCache(ctx, cn.GlobalPluginValue)
 	if err != nil {
-		l.Errorf("License validation failed: %v (code %s)", err, constant.ErrGlobalLicenseValidationFailed.Error())
-		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseValidationFailed.Error(), "License validation failed"))
+		l.Errorf("License validation failed: %v", err)
+		panic(fmt.Sprintf("License validation failed: %s", err.Error()))
 	}
 
 	if !result.Valid && !result.ActiveGracePeriod {
-		l.Errorf("License is invalid (code %s)", constant.ErrGlobalLicenseInvalid.Error())
-		panic(fmt.Sprintf("%s: %s", constant.ErrGlobalLicenseInvalid.Error(), "No valid license found"))
+		l.Error("License is invalid")
+		panic("No valid license found")
 	}
 
-	c.logLicenseStatus(result, constant.GlobalPluginValue)
+	c.logLicenseStatus(result, cn.GlobalPluginValue)
 }
 
 // validateMultiOrgLicensesOnStartup validates each configured organization licence at startup.
@@ -86,7 +87,7 @@ func (c *LicenseClient) validateMultiOrgLicensesOnStartup(ctx context.Context) {
 	_, err := c.validator.ValidateAllOrganizations(ctx)
 	if err != nil {
 		l.Debugf("error in validateMultiOrgLicensesOnStartup: %v", err)
-		panic(fmt.Sprintf("%s: %s", constant.ErrNoValidLicenses.Error(), "No valid licenses found for any organization"))
+		panic("No valid licenses found for any organization")
 	}
 }
 
@@ -103,46 +104,30 @@ func (c *LicenseClient) processGlobalPluginRequest(ctx *fiber.Ctx) error {
 func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 	l := c.validator.GetLogger()
 
-	orgID := ctx.Get(constant.OrganizationIDHeader)
+	orgID := ctx.Get(cn.OrganizationIDHeader)
 	if orgID == "" {
-		l.Errorf("Missing org header (code %s)", constant.ErrMissingOrgIDHeader.Error())
+		l.Errorf("Missing org header (code %s)", cn.ErrMissingOrgIDHeader.Error())
 
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrMissingOrgIDHeader.Error(),
-			"title":   "Missing Organization ID",
-			"message": "X-Organization-ID header is required",
-		})
+		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(cn.ErrMissingOrgIDHeader, "", cn.OrganizationIDHeader))
 	}
 
-	if !util.ContainsOrganizationID(c.validator.GetOrganizationIDs(), orgID) {
+	if !pkg.ContainsOrganizationID(c.validator.GetOrganizationIDs(), orgID) {
 		l.Errorf("Unknown org ID %s", orgID)
 
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrMissingOrgIDHeader.Error(),
-			"title":   "Unknown Organization ID",
-			"message": "Organization ID is not configured for this license",
-		})
+		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(cn.ErrUnknownOrgIDHeader, "", orgID))
 	}
 
 	res, err := c.validator.ValidateOrganizationWithCache(ctx.Context(), orgID)
 	if err != nil {
-		l.Errorf("Validation failed for org %s: %v (code %s)", orgID, err, constant.ErrOrgLicenseValidationFail.Error())
+		l.Errorf("Validation failed for org %s: %v", orgID, err)
 
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrOrgLicenseValidationFail.Error(),
-			"title":   "License Validation Failed",
-			"message": fmt.Sprintf("License validation failed for organization %s", orgID),
-		})
+		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(err, "", orgID))
 	}
 
 	if !res.Valid && !res.ActiveGracePeriod {
-		l.Errorf("Org %s license invalid (code %s)", orgID, constant.ErrOrgLicenseInvalid.Error())
+		l.Errorf("Org %s license invalid", orgID)
 
-		return ctx.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"code":    constant.ErrOrgLicenseInvalid.Error(),
-			"title":   "Invalid License",
-			"message": fmt.Sprintf("License is invalid or expired for organization %s", orgID),
-		})
+		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(cn.ErrOrgLicenseInvalid, "", orgID))
 	}
 
 	return ctx.Next()
