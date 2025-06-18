@@ -1,3 +1,10 @@
+## [1.18.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.17.0...v1.18.0-beta.1) (2025-06-18)
+
+
+### Features
+
+* **cache:** upgrade to ristretto v2 with generic types and improved TTL handling ([645880e](https://github.com/LerianStudio/lib-license-go/commit/645880e80a4886c1e7d6b7a9109bb6b0db477443))
+
 ## [1.17.0](https://github.com/LerianStudio/lib-license-go/compare/v1.16.0...v1.17.0) (2025-06-17)
 
 
