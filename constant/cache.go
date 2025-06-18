@@ -12,4 +12,6 @@ const (
 	CacheMaxCost = 1 << 20
 	// CacheBufferItems is the number of keys per Get buffer
 	CacheBufferItems = 64
+	// CacheTTLTickerDurationInSec is the duration of the TTL ticker
+	CacheTTLTickerDurationInSec = 60
 )
