@@ -395,27 +395,39 @@ func (c *Client) logTrialLicense(orgID string, expiryDays int) {
 
 // logValidLicense handles logging for valid non-trial licenses
 func (c *Client) logValidLicense(orgID string, expiryDays int) {
+	messagePrefix := fmt.Sprintf("Organization %s license", orgID)
+
+	if c.IsGlobal {
+		messagePrefix = "Application license"
+	}
+
 	switch {
 	case expiryDays <= cn.DefaultMinExpiryDaysToUrgentWarn:
 		// License valid and within urgent warning threshold
-		c.logger.Warnf("WARNING: Organization %s license expires in %d days. Contact your account manager to renew", orgID, expiryDays)
+		c.logger.Warnf("WARNING: %s expires in %d days. Contact support to renew license", messagePrefix, expiryDays)
 	case expiryDays <= cn.DefaultMinExpiryDaysToNormalWarn:
 		// License valid but approaching expiration
-		c.logger.Warnf("Organization %s license expires in %d days", orgID, expiryDays)
+		c.logger.Warnf("%s expires in %d days", messagePrefix, expiryDays)
 	default:
 		// General valid license message
-		c.logger.Infof("Organization %s has a valid license", orgID)
+		c.logger.Infof("%s is valid", messagePrefix)
 	}
 }
 
 // logGracePeriod handles logging for licenses in grace period
 func (c *Client) logGracePeriod(orgID string, expiryDays int) {
+	messagePrefix := fmt.Sprintf("Organization %s", orgID)
+
+	if c.IsGlobal {
+		messagePrefix = "Application"
+	}
+
 	if expiryDays <= cn.DefaultGraceExpiryDaysToCriticalWarn {
 		// Grace period is about to expire
-		c.logger.Warnf("CRITICAL: Organization %s grace period ends in %d days - application will terminate. Contact support immediately to renew license", orgID, expiryDays)
+		c.logger.Warnf("CRITICAL: %s grace period ends in %d days. Contact support immediately to renew license", messagePrefix, expiryDays)
 	} else {
 		// General grace period warning
-		c.logger.Warnf("WARNING: Organization %s license has expired but grace period is active for %d more days", orgID, expiryDays)
+		c.logger.Warnf("WARNING: %s license has expired but grace period is active for %d more days. Contact support to renew license", messagePrefix, expiryDays)
 	}
 }
 
