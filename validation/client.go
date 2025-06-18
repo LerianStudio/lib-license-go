@@ -199,9 +199,9 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 
 	// If no valid organizations, terminate the application
 	if !validFound {
-		// Construct a comprehensive error message with all validation errors
-		baseErrMsg := "All license validations failed"
 		var orgIDsErrorMsgs string
+
+		baseErrMsg := "All license validations failed"
 
 		if len(allOrgErrors) > 0 {
 			errMsgs := make([]string, len(allOrgErrors))

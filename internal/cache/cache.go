@@ -19,7 +19,7 @@ func New(logger log.Logger) (*Manager, error) {
 		NumCounters:            constant.CacheNumCounters,
 		MaxCost:                constant.CacheMaxCost,
 		BufferItems:            constant.CacheBufferItems,
-		TtlTickerDurationInSec: constant.CacheTtlTickerDurationInSec,
+		TtlTickerDurationInSec: constant.CacheTTLTickerDurationInSec,
 	})
 	if err != nil {
 		return nil, err
