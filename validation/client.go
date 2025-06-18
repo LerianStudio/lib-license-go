@@ -12,13 +12,13 @@ import (
 	"github.com/LerianStudio/lib-commons/commons/shutdown"
 	"github.com/LerianStudio/lib-commons/commons/zap"
 	cn "github.com/LerianStudio/lib-license-go/constant"
-	libErr "github.com/LerianStudio/lib-license-go/error"
 	"github.com/LerianStudio/lib-license-go/internal/api"
 	"github.com/LerianStudio/lib-license-go/internal/cache"
 	"github.com/LerianStudio/lib-license-go/internal/config"
 	"github.com/LerianStudio/lib-license-go/internal/refresh"
 	"github.com/LerianStudio/lib-license-go/model"
-	"github.com/LerianStudio/lib-license-go/util"
+	"github.com/LerianStudio/lib-license-go/pkg"
+	pkgHTTP "github.com/LerianStudio/lib-license-go/pkg/net/http"
 )
 
 // Client handles license validation with caching and background refresh
@@ -46,7 +46,7 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	}
 
 	// Parse organization IDs
-	parsedOrgIDs := util.ParseOrganizationIDs(orgIDs)
+	parsedOrgIDs := pkg.ParseOrganizationIDs(orgIDs)
 
 	// Create and validate config
 	cfg := &config.ClientConfig{
@@ -154,7 +154,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 		result, err := c.apiClient.ValidateOrganization(ctx, orgID)
 
 		// Check if this is a server error (5xx) which should be treated as valid with grace period
-		if apiErr, ok := err.(*libErr.APIError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
+		if apiErr, ok := err.(*pkg.HTTPError); ok && apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			c.logger.Debugf("License server error (5xx) detected for organization %s, treating as valid - error: %s",
 				orgID, apiErr.Error())
 
@@ -187,7 +187,7 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 				c.logger.Debugf("error: %v", err)
 
 				// For APIErrors, we want to log appropriately but not terminate
-				if apiErr, ok := err.(*libErr.APIError); ok {
+				if apiErr, ok := err.(*pkg.HTTPError); ok {
 					c.logger.Debugf("Organization %s license validation failed with status code %d: %v",
 						orgID, apiErr.StatusCode, apiErr.Error())
 				} else {
@@ -309,7 +309,7 @@ func (c *Client) ValidateWithRetry(ctx context.Context) error {
 // This is called for single organization validation (not from validateAndHandleAllOrgs)
 func (c *Client) handleAPIError(orgID string, err error) (model.ValidationResult, error) {
 	// Handle APIErrors specially
-	if apiErr, ok := err.(*libErr.APIError); ok {
+	if apiErr, ok := err.(*pkg.HTTPError); ok {
 		// Server errors (5xx) are treated as temporary and we fall back to cached value
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			c.logger.Debugf("License server error (5xx) detected, treating as valid - error: %s", apiErr.Error())
@@ -332,19 +332,23 @@ func (c *Client) handleAPIError(orgID string, err error) (model.ValidationResult
 		// In multi-org validation, these errors are handled in validateAndHandleAllOrgs
 		if apiErr.StatusCode >= 400 && apiErr.StatusCode < 500 {
 			// Check if we're in a multi-org validation process
-			if len(c.config.OrganizationIDs) > 1 {
+			if orgID != cn.GlobalPluginValue {
 				// For multi-org validation, just return the error so the loop can continue
-				return model.ValidationResult{}, apiErr
+				return model.ValidationResult{}, pkg.ForbiddenError{
+					Code:    apiErr.Code,
+					Title:   apiErr.Title,
+					Message: apiErr.Message,
+				}
 			}
 
 			// For single org validation, terminate as before
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
-			panic(fmt.Sprintf("%s: %s", cn.ErrGlobalLicenseValidationFailed.Error(), "License validation failed with client error: "+apiErr.Error()))
+			panic(fmt.Sprintf("License validation failed with client error: %s", apiErr.Error()))
 		}
 	}
 
 	// Handle connection errors by using the cached result if available
-	if libErr.IsConnectionError(err) {
+	if pkgHTTP.IsConnectionError(err) {
 		if result, found := c.cacheManager.Get(orgID); found {
 			c.logger.Debugf("Using cached license validation for org %s due to connection error: %s", orgID, err.Error())
 			return result, nil
@@ -352,7 +356,7 @@ func (c *Client) handleAPIError(orgID string, err error) (model.ValidationResult
 	}
 
 	// For any other errors, just return the error
-	return model.ValidationResult{}, fmt.Errorf("failed to validate license: %w", err)
+	return model.ValidationResult{}, cn.ErrOrgLicenseValidationFail
 }
 
 // logValidResult handles a valid license response
