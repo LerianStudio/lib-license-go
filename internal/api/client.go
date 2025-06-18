@@ -147,14 +147,8 @@ func (c *Client) handleErrorResponse(resp *http.Response) error {
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-<<<<<<< Updated upstream
-		apiErr := &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
-		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
-			resp.StatusCode, errorResp.Code, errorResp.Message)
-=======
 		c.logger.Debugf("Client error during license validation - status: %d, code: %s, title: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Title, errorResp.Message)
->>>>>>> Stashed changes
 
 		return &pkg.HTTPError{StatusCode: resp.StatusCode, Code: errorResp.Code, Title: errorResp.Title, Message: errorResp.Message}
 	}
