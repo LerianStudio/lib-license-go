@@ -339,7 +339,7 @@ func (c *Client) handleAPIError(orgID string, err error) (model.ValidationResult
 
 			// For single org validation, terminate as before
 			c.logger.Errorf("Exiting: license validation failed with client error: %s", apiErr.Error())
-			panic(fmt.Sprintf("%s: %s", cn.ErrGlobalLicenseValidationFailed.Error(), "License validation failed with client error: "+apiErr.Error()))
+			panic(fmt.Sprintf("%s: License validation failed with client error: %s", cn.ErrGlobalLicenseValidationFailed.Error(), apiErr.Error()))
 		}
 	}
 

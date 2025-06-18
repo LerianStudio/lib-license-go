@@ -145,22 +145,22 @@ func (c *Client) handleErrorResponse(resp *http.Response) error {
 	_ = json.Unmarshal(bodyBytes, &errorResp)
 
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-		c.logger.Debugf("Server error during license validation - status: %d, code: %s, message: %s",
-			resp.StatusCode, errorResp.Code, errorResp.Message)
+		c.logger.Debugf("Server error during license validation - status: %d, code: %s, title: %s, message: %s",
+			resp.StatusCode, errorResp.Code, errorResp.Title, errorResp.Message)
 
 		return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		apiErr := &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
-		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
-			resp.StatusCode, errorResp.Code, errorResp.Message)
+		apiErr := &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %s - %s", errorResp.Code, errorResp.Title)}
+		c.logger.Debugf("Client error during license validation - status: %d, code: %s, title: %s, message: %s",
+			resp.StatusCode, errorResp.Code, errorResp.Title, errorResp.Message)
 
 		return apiErr
 	}
 
-	c.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, message: %s",
-		resp.StatusCode, errorResp.Code, errorResp.Message)
+	c.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, title: %s, message: %s",
+		resp.StatusCode, errorResp.Code, errorResp.Title, errorResp.Message)
 
 	return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
 }
