@@ -1,3 +1,10 @@
+## [1.19.0](https://github.com/LerianStudio/lib-license-go/compare/v1.18.0...v1.19.0) (2025-06-18)
+
+
+### Features
+
+* **validation:** add title field to error response and improve error handling ([0948e5c](https://github.com/LerianStudio/lib-license-go/commit/0948e5ceadbbc69704047133edbb5af7c19f4a53))
+
 ## [1.19.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.18.0...v1.19.0-beta.1) (2025-06-18)
 
 
