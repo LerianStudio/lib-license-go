@@ -9,12 +9,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/LerianStudio/lib-commons/commons"
 	"github.com/LerianStudio/lib-commons/commons/log"
 	cn "github.com/LerianStudio/lib-license-go/constant"
-	libErr "github.com/LerianStudio/lib-license-go/error"
 	"github.com/LerianStudio/lib-license-go/internal/config"
 	"github.com/LerianStudio/lib-license-go/model"
+	"github.com/LerianStudio/lib-license-go/pkg"
 )
 
 // Client handles communication with the license API
@@ -76,10 +75,6 @@ func getBaseURLFromEnvOrDefault() string {
 // ValidateOrganization validates the license with the provided organization ID
 // Returns the first successful validation result or the last error encountered
 func (c *Client) ValidateOrganization(ctx context.Context, orgID string) (model.ValidationResult, error) {
-	if commons.IsNilOrEmpty(&orgID) {
-		return model.ValidationResult{}, fmt.Errorf("no organization ID provided")
-	}
-
 	result, err := c.validateForOrganization(ctx, orgID)
 	if err != nil {
 		return model.ValidationResult{}, err
@@ -148,19 +143,24 @@ func (c *Client) handleErrorResponse(resp *http.Response) error {
 		c.logger.Debugf("Server error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
 
-		return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("server error: %d", resp.StatusCode)}
+		return &pkg.HTTPError{StatusCode: resp.StatusCode, Code: errorResp.Code, Title: errorResp.Title, Message: errorResp.Message}
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+<<<<<<< Updated upstream
 		apiErr := &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("client error: %d", resp.StatusCode)}
 		c.logger.Debugf("Client error during license validation - status: %d, code: %s, message: %s",
 			resp.StatusCode, errorResp.Code, errorResp.Message)
+=======
+		c.logger.Debugf("Client error during license validation - status: %d, code: %s, title: %s, message: %s",
+			resp.StatusCode, errorResp.Code, errorResp.Title, errorResp.Message)
+>>>>>>> Stashed changes
 
-		return apiErr
+		return &pkg.HTTPError{StatusCode: resp.StatusCode, Code: errorResp.Code, Title: errorResp.Title, Message: errorResp.Message}
 	}
 
 	c.logger.Debugf("Unexpected error during license validation - status: %d, code: %s, message: %s",
 		resp.StatusCode, errorResp.Code, errorResp.Message)
 
-	return &libErr.APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("unexpected error: %d", resp.StatusCode)}
+	return &pkg.HTTPError{StatusCode: resp.StatusCode, Code: errorResp.Code, Title: errorResp.Title, Message: errorResp.Message}
 }
