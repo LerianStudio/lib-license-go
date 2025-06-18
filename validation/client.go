@@ -200,7 +200,8 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 	// If no valid organizations, terminate the application
 	if !validFound {
 		// Construct a comprehensive error message with all validation errors
-		var errMsg string
+		baseErrMsg := "All license validations failed"
+		var orgIDsErrorMsgs string
 
 		if len(allOrgErrors) > 0 {
 			errMsgs := make([]string, len(allOrgErrors))
@@ -208,13 +209,14 @@ func (c *Client) validateMultipleOrganizations(ctx context.Context, orgIDs []str
 				errMsgs[i] = err.Error()
 			}
 
-			errMsg = fmt.Sprintf("All license validations failed: [%s]", strings.Join(errMsgs, "; "))
+			orgIDsErrorMsgs = fmt.Sprintf("[%s]", strings.Join(errMsgs, "; "))
 		} else {
-			errMsg = "No valid licenses found for any configured organization"
+			orgIDsErrorMsgs = fmt.Sprintf("%s: No valid licenses found for any configured organization", baseErrMsg)
 		}
 
-		c.logger.Errorf("Exiting: %s: %s", cn.ErrNoValidLicenses.Error(), errMsg)
-		panic(fmt.Sprintf("%s: %s", cn.ErrNoValidLicenses.Error(), errMsg))
+		c.logger.Errorf("Exiting: %s: %s", cn.ErrNoValidLicenses.Error(), baseErrMsg)
+		c.logger.Debugf("Org IDs error: %s", orgIDsErrorMsgs)
+		panic(fmt.Sprintf("%s: %s", cn.ErrNoValidLicenses.Error(), orgIDsErrorMsgs))
 	}
 
 	return lastValidResult, nil
@@ -228,6 +230,15 @@ func (c *Client) validateSingleOrganization(ctx context.Context, orgID string) (
 	if err != nil {
 		// Handle errors according to type
 		return c.handleAPIError(orgID, err)
+	}
+
+	errMsg := "No valid licenses found"
+
+	// Check if the license is valid or in grace period
+	if !result.Valid && !result.ActiveGracePeriod {
+		// License is expired and not in grace period
+		c.logger.Errorf("Exiting: %s", errMsg)
+		panic(fmt.Sprintf("%s: %s", cn.ErrNoValidLicenses.Error(), errMsg))
 	}
 
 	// Successful validation
