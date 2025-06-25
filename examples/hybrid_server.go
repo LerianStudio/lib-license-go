@@ -58,15 +58,15 @@ func startHTTPServer(licenseClient *libLicense.LicenseClient) {
 		return c.JSON(fiber.Map{"users": []string{"user1", "user2"}})
 	})
 
-	log.Println("Starting HTTP server on :8080")
-	if err := app.Listen(":8080"); err != nil {
+	log.Println("Starting HTTP server on 127.0.0.1:8080")
+	if err := app.Listen("127.0.0.1:8080"); err != nil {
 		log.Fatalf("HTTP server failed: %v", err)
 	}
 }
 
 // startGRPCServer demonstrates gRPC server setup
 func startGRPCServer(licenseClient *libLicense.LicenseClient) {
-	lis, err := net.Listen("tcp", ":9090")
+	lis, err := net.Listen("tcp", "127.0.0.1:9090")
 	if err != nil {
 		log.Fatalf("Failed to listen on port 9090: %v", err)
 	}
@@ -84,7 +84,7 @@ func startGRPCServer(licenseClient *libLicense.LicenseClient) {
 	// Enable reflection for testing with grpcurl
 	reflection.Register(server)
 
-	log.Println("Starting gRPC server on :9090")
+	log.Println("Starting gRPC server on 127.0.0.1:9090")
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("gRPC server failed: %v", err)
 	}
