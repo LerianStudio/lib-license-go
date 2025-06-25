@@ -1,3 +1,5 @@
+## [1.20.0-beta.2](https://github.com/LerianStudio/lib-license-go/compare/v1.20.0-beta.1...v1.20.0-beta.2) (2025-06-25)
+
 ## [1.20.0-beta.1](https://github.com/LerianStudio/lib-license-go/compare/v1.19.0...v1.20.0-beta.1) (2025-06-25)
 
 
