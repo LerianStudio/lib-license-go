@@ -1,19 +1,21 @@
 # Plugin License SDK
 
-A lightweight Go SDK + Fiber middleware to validate plugin licenses against the Lerian backend.
+A lightweight Go SDK with HTTP middleware and gRPC interceptors to validate plugin licenses against the Lerian backend.
 
 ## Features
 
 * Ristretto in-memory cache for fast look-ups
 * Periodic background refresh (weekly)
-* Fiber middleware → drop-in guard for any route
+* **HTTP Middleware** → Fiber middleware for HTTP routes
+* **gRPC Interceptors** → Unary and streaming interceptors for gRPC services
 * Fetches license validity & enabled plugins from Gateway (AWS API Gateway)
+* Supports both global and multi-organization license validation modes
 
-## 🚀 How to Use
+## 🚀 Quick Start
 
-### 1. Set the needed environment variables:
+### 1. Environment Configuration
 
-In your environment configuration or `.env` file, set the following environment variables:
+Set the required environment variables in your `.env` file or environment configuration:
 
 ```dotenv
 APPLICATION_NAME=your-application-name
@@ -21,57 +23,200 @@ LICENSE_KEY=your-plugin-license-key
 ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
 
-### 2. Create a new instance of the middleware:
+### 2. Initialize the License Client
 
-In your `config.go` file, configure the environment variables for the Auth Service:
+Create a license client instance in your application setup:
 
 ```go
 import libLicense "github.com/LerianStudio/lib-license-go/middleware"
 
 type Config struct {
-    ApplicationName        string   `env:"APPLICATION_NAME"`
-    LicenseKey             string   `env:"LICENSE_KEY"`
-    OrganizationIDs        string   `env:"ORGANIZATION_IDS"`
+    ApplicationName string `env:"APPLICATION_NAME"`
+    LicenseKey      string `env:"LICENSE_KEY"`
+    OrganizationIDs string `env:"ORGANIZATION_IDS"`
 }
 
-func InitServers() *Service {
-	cfg := &Config{}
-	
-	logger := zap.InitializeLogger()
-	
-	licenseClient := libLicense.NewLicenseClient(
-		cfg.ApplicationName,
-		cfg.LicenseKey,
-		cfg.OrganizationIDs,
-		&logger,
-	)
+func InitServices() *Service {
+    cfg := &Config{}
+    
+    logger := zap.InitializeLogger()
+    
+    licenseClient := libLicense.NewLicenseClient(
+        cfg.ApplicationName,
+        cfg.LicenseKey,
+        cfg.OrganizationIDs,
+        &logger,
+    )
 
-	httpApp := httpIn.NewRoutes(logger, [...], licenseClient)
+    // Use with HTTP or gRPC services
+    httpApp := httpIn.NewRoutes(logger, licenseClient)
+    grpcServer := grpcIn.NewServer(logger, licenseClient)
 
-	serverAPI := NewServer(cfg, httpApp, logger, [...])
-
-	return &Service{
-		serverAPI,
-		logger,
-	}
+    return &Service{
+        httpApp,
+        grpcServer,
+        logger,
+    }
+}
 ```
 
-### 3. Use the middleware in your Fiber application:
+## 📡 HTTP Middleware Usage
+
+### Basic Fiber Integration
 
 ```go
-func NewRoutes(license *libLicense.LicenseClient, [...]) *fiber.App {
+func NewRoutes(license *libLicense.LicenseClient) *fiber.App {
     f := fiber.New(fiber.Config{
         DisableStartupMessage: true,
     })
     
+    // Apply license middleware to all routes
     f.Use(license.Middleware())
     
-    // Applications routes
+    // Your application routes
     f.Get("/v1/applications", applicationHandler.GetApplications)
+    f.Post("/v1/users", userHandler.CreateUser)
+    
+    return f
 }
 ```
 
-#### Add graceful shutdown support in your server using the `lib-commons` package function `StartServerWithGracefulShutdown`
+### Multi-Organization Header
+
+For multi-organization mode, ensure your HTTP requests include the organization ID header:
+
+```bash
+curl -H "X-Organization-ID: your-org-id" http://localhost:8080/v1/applications
+```
+
+## 🔌 gRPC Interceptor Usage
+
+### Unary RPC Interceptor
+
+```go
+import (
+    "google.golang.org/grpc"
+    libLicense "github.com/LerianStudio/lib-license-go/middleware"
+)
+
+func NewGRPCServer(license *libLicense.LicenseClient) *grpc.Server {
+    // Create gRPC server with license interceptor
+    server := grpc.NewServer(
+        grpc.UnaryInterceptor(license.UnaryServerInterceptor()),
+    )
+    
+    // Register your services
+    pb.RegisterYourServiceServer(server, &yourServiceImpl{})
+    
+    return server
+}
+```
+
+### Streaming RPC Interceptor
+
+```go
+func NewGRPCServerWithStreaming(license *libLicense.LicenseClient) *grpc.Server {
+    // Create gRPC server with both unary and streaming interceptors
+    server := grpc.NewServer(
+        grpc.UnaryInterceptor(license.UnaryServerInterceptor()),
+        grpc.StreamInterceptor(license.StreamServerInterceptor()),
+    )
+    
+    // Register your services
+    pb.RegisterYourServiceServer(server, &yourServiceImpl{})
+    
+    return server
+}
+```
+
+### Multi-Organization Metadata
+
+For multi-organization mode, gRPC clients must include the organization ID in metadata:
+
+```go
+import (
+    "context"
+    "google.golang.org/grpc/metadata"
+)
+
+func callGRPCService(client pb.YourServiceClient, orgID string) {
+    // Add organization ID to metadata
+    ctx := metadata.AppendToOutgoingContext(
+        context.Background(),
+        "X-Organization-ID", orgID,
+    )
+    
+    // Make the gRPC call
+    response, err := client.YourMethod(ctx, &pb.YourRequest{})
+    if err != nil {
+        log.Fatalf("gRPC call failed: %v", err)
+    }
+}
+```
+
+## 🔄 Hybrid HTTP + gRPC Usage
+
+When your application runs both HTTP and gRPC servers, you can use the same `LicenseClient` instance for both. The SDK ensures that startup validation and background refresh happen only **once**, regardless of how many servers use the client.
+
+### Single Client, Multiple Servers
+
+```go
+func main() {
+    logger := log.NewLogger()
+    
+    // Create ONE license client for both servers
+    licenseClient := libLicense.NewLicenseClient(
+        "your-app-id",
+        "your-license-key",
+        "org1,org2", 
+        &logger,
+    )
+
+    // Start both servers with the same client
+    go startHTTPServer(licenseClient)  // First call triggers validation
+    go startGRPCServer(licenseClient)  // Second call skips validation (sync.Once)
+    
+    select {} // Keep main alive
+}
+
+func startHTTPServer(client *libLicense.LicenseClient) {
+    app := fiber.New()
+    app.Use(client.Middleware()) // Triggers startup validation ONCE
+    
+    app.Get("/api/users", userHandler)
+    app.Listen(":8080")
+}
+
+func startGRPCServer(client *libLicense.LicenseClient) {
+    server := grpc.NewServer(
+        grpc.UnaryInterceptor(client.UnaryServerInterceptor()),   // Skips validation
+        grpc.StreamInterceptor(client.StreamServerInterceptor()), // Skips validation
+    )
+    
+    pb.RegisterYourServiceServer(server, &serviceImpl{})
+    
+    lis, _ := net.Listen("tcp", ":9090")
+    server.Serve(lis)
+}
+```
+
+### Benefits of Single Client
+
+- ✅ **Single startup validation** - No duplicate license checks
+- ✅ **One background refresh** - Shared cache and refresh cycle  
+- ✅ **Consistent state** - Both servers see the same license status
+- ✅ **Resource efficiency** - Reduced memory and network usage
+- ✅ **Synchronized shutdown** - Single point for cleanup
+
+### Per-Request Validation
+
+While startup and background validation happen once, per-request validation works independently for each protocol:
+
+- **HTTP requests** validate organization ID from `X-Organization-ID` header
+- **gRPC requests** validate organization ID from metadata
+- Each request is validated separately (no shared state per request)
+
+## 🛡️ Graceful Shutdown Integration
 
 ```go
 "github.com/LerianStudio/lib-commons/commons"
@@ -115,6 +260,45 @@ func (s *Server) Run(l *commons.Launcher) error {
 	return nil
 }
 ```
+
+## 🔧 Advanced Configuration
+
+### Custom Termination Handler
+
+```go
+// Set custom behavior when license validation fails
+licenseClient.SetTerminationHandler(func(reason string) {
+    log.Fatalf("License validation failed: %s", reason)
+    os.Exit(1)
+})
+```
+
+### Manual Shutdown
+
+```go
+// Manually stop background refresh process
+defer licenseClient.ShutdownBackgroundRefresh()
+```
+
+## 🏗️ Architecture
+
+The SDK is organized into separate files for better maintainability:
+
+- `client.go` - Core license client and shared validation logic
+- `http.go` - HTTP Fiber middleware implementation  
+- `grpc.go` - gRPC unary and streaming interceptors
+- `middleware.go` - Package documentation and overview
+
+## 🚨 Error Handling
+
+### HTTP Errors
+- `400 Bad Request` - Missing or invalid organization ID
+- `403 Forbidden` - Invalid or expired license
+
+### gRPC Errors  
+- `INVALID_ARGUMENT` - Missing or unknown organization ID
+- `PERMISSION_DENIED` - Invalid or expired license
+- `INTERNAL` - Server-side validation errors
 
 ## 📧 Contact
 
