@@ -31,6 +31,10 @@ func main() {
 		log.Fatal("Failed to create license client")
 	}
 
+	// Explicitly perform startup validation once
+	// This validates the license and starts background refresh
+	licenseClient.StartupValidation()
+
 	// Start both servers concurrently
 	go startHTTPServer(licenseClient)
 	go startGRPCServer(licenseClient)

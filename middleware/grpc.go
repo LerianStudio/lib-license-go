@@ -14,8 +14,8 @@ import (
 // UnaryServerInterceptor creates a gRPC unary server interceptor that validates the license
 // It works similarly to the HTTP middleware but adapted for gRPC context
 func (c *LicenseClient) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	// Perform startup validation
-	c.startupValidation()
+	// Validate client initialization
+	c.ValidateInitialization("create unary interceptor")
 
 	// Return the interceptor function
 	return func(
@@ -24,9 +24,8 @@ func (c *LicenseClient) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
-		if c == nil || c.validator == nil {
-			return handler(ctx, req)
-		}
+		// Validate client initialization for each request
+		c.ValidateInitialization("process unary request")
 
 		if c.validator.IsGlobal {
 			// In global mode, validation happens at startup and through background refresh
@@ -39,8 +38,8 @@ func (c *LicenseClient) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamServerInterceptor creates a gRPC stream server interceptor that validates the license
 func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
-	// Perform startup validation
-	c.startupValidation()
+	// Validate client initialization
+	c.ValidateInitialization("create stream interceptor")
 
 	// Return the interceptor function
 	return func(
@@ -49,9 +48,8 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		if c == nil || c.validator == nil {
-			return handler(srv, ss)
-		}
+		// Validate client initialization for each request
+		c.ValidateInitialization("process stream request")
 
 		if c.validator.IsGlobal {
 			// In global mode, validation happens at startup and through background refresh
