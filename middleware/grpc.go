@@ -86,12 +86,14 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 			}
 
 			l.Errorf("Validation failed for org %s: %v", orgID, err)
+
 			return status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
 		}
 
 		// Check if the license is valid
 		if !res.Valid && !res.ActiveGracePeriod {
 			l.Errorf("Org %s license invalid", orgID)
+
 			return status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
 		}
 
@@ -134,12 +136,14 @@ func (c *LicenseClient) processGRPCMultiOrgRequest(
 		}
 
 		l.Errorf("Validation failed for org %s: %v", orgID, err)
+
 		return nil, status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
 	}
 
 	// Check if the license is valid
 	if !res.Valid && !res.ActiveGracePeriod {
 		l.Errorf("Org %s license invalid", orgID)
+
 		return nil, status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
 	}
 

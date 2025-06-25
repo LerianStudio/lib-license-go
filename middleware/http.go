@@ -56,12 +56,14 @@ func (c *LicenseClient) processMultiOrgPluginRequest(ctx *fiber.Ctx) error {
 		}
 
 		l.Errorf("Validation failed for org %s: %v", orgID, err)
+
 		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(err, "", orgID))
 	}
 
 	// Check if license is valid
 	if !res.Valid && !res.ActiveGracePeriod {
 		l.Errorf("Org %s license invalid", orgID)
+
 		return pkgHTTP.WithError(ctx, pkg.ValidateBusinessError(cn.ErrOrgLicenseInvalid, "", orgID))
 	}
 
