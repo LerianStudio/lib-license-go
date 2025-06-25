@@ -9,14 +9,13 @@ import (
 
 // Middleware creates a Fiber middleware that validates the license and manages background refresh
 func (c *LicenseClient) Middleware() fiber.Handler {
-	// Perform startup validation
-	c.startupValidation()
+	// Validate client initialization
+	c.ValidateInitialization("create middleware")
 
 	// Return request handler
 	return func(ctx *fiber.Ctx) error {
-		if c == nil || c.validator == nil {
-			return ctx.Next()
-		}
+		// Validate client initialization for each request
+		c.ValidateInitialization("process request")
 
 		if c.validator.IsGlobal {
 			return c.processGlobalPluginRequest(ctx)
