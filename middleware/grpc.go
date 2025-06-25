@@ -4,7 +4,6 @@ import (
 	"context"
 
 	cn "github.com/LerianStudio/lib-license-go/constant"
-	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/pkg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -58,8 +57,7 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 		}
 
 		// Validate organization ID from gRPC metadata
-		_, err := c.validateGRPCOrganizationID(ss.Context())
-		if err != nil {
+		if err := c.validateGRPCOrganizationID(ss.Context()); err != nil {
 			return err
 		}
 
@@ -69,23 +67,23 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 }
 
 // validateGRPCOrganizationID extracts and validates the organization ID from gRPC metadata
-// Returns the validation result and any error that occurred during validation
+// Returns an error if validation fails
 // This is a helper function to avoid code duplication between unary and stream interceptors
-func (c *LicenseClient) validateGRPCOrganizationID(ctx context.Context) (model.ValidationResult, error) {
+func (c *LicenseClient) validateGRPCOrganizationID(ctx context.Context) error {
 	l := c.validator.GetLogger()
 
 	// Extract organization ID from metadata
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		l.Error("Failed to extract metadata from gRPC context")
-		return model.ValidationResult{}, status.Error(codes.Internal, "missing metadata")
+		return status.Error(codes.Internal, "missing metadata")
 	}
 
 	// Get organization ID from metadata
 	orgIDs := md.Get(cn.OrganizationIDHeader)
 	if len(orgIDs) == 0 {
 		l.Errorf("Missing org header (code %s)", cn.ErrMissingOrgIDHeader.Error())
-		return model.ValidationResult{}, status.Error(codes.InvalidArgument, cn.ErrMissingOrgIDHeader.Error())
+		return status.Error(codes.InvalidArgument, cn.ErrMissingOrgIDHeader.Error())
 	}
 
 	orgID := orgIDs[0]
@@ -95,20 +93,23 @@ func (c *LicenseClient) validateGRPCOrganizationID(ctx context.Context) (model.V
 	if err != nil {
 		if err == cn.ErrUnknownOrgIDHeader {
 			l.Errorf("Unknown org ID %s", orgID)
-			return model.ValidationResult{}, status.Error(codes.InvalidArgument, cn.ErrUnknownOrgIDHeader.Error())
+
+			return status.Error(codes.InvalidArgument, cn.ErrUnknownOrgIDHeader.Error())
 		}
 
 		l.Errorf("Validation failed for org %s: %v", orgID, err)
-		return model.ValidationResult{}, status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
+
+		return status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
 	}
 
 	// Check if the license is valid
 	if !res.Valid && !res.ActiveGracePeriod {
 		l.Errorf("Org %s license invalid", orgID)
-		return model.ValidationResult{}, status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
+
+		return status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
 	}
 
-	return res, nil
+	return nil
 }
 
 // processGRPCMultiOrgRequest handles gRPC requests in multi-org mode
@@ -119,8 +120,7 @@ func (c *LicenseClient) processGRPCMultiOrgRequest(
 	handler grpc.UnaryHandler,
 ) (any, error) {
 	// Validate organization ID from gRPC metadata
-	_, err := c.validateGRPCOrganizationID(ctx)
-	if err != nil {
+	if err := c.validateGRPCOrganizationID(ctx); err != nil {
 		return nil, err
 	}
 
