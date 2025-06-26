@@ -10,7 +10,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
-	google.golang.org/grpc v1.72.2
+	google.golang.org/grpc v1.73.0
 )
 
 require (
