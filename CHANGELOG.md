@@ -1,3 +1,15 @@
+## [1.20.0](https://github.com/LerianStudio/lib-license-go/compare/v1.19.0...v1.20.0) (2025-06-26)
+
+
+### Features
+
+* add gRPC interceptors and hybrid server support for license validation ([9fb333e](https://github.com/LerianStudio/lib-license-go/commit/9fb333e711b3728f9af2877fd711d648bb1f3140))
+
+
+### Bug Fixes
+
+* bind HTTP and gRPC servers to localhost instead of all interfaces ([aed6b19](https://github.com/LerianStudio/lib-license-go/commit/aed6b19cc76a41374b2208b32611145940cd52f2))
+
 ## [1.20.0-beta.4](https://github.com/LerianStudio/lib-license-go/compare/v1.20.0-beta.3...v1.20.0-beta.4) (2025-06-26)
 
 ## [1.20.0-beta.3](https://github.com/LerianStudio/lib-license-go/compare/v1.20.0-beta.2...v1.20.0-beta.3) (2025-06-26)
