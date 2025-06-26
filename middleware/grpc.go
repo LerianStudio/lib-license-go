@@ -56,43 +56,9 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 			return handler(srv, ss)
 		}
 
-		ctx := ss.Context()
-		l := c.validator.GetLogger()
-
-		// Extract organization ID from metadata
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			l.Error("Failed to extract metadata from gRPC context")
-			return status.Error(codes.Internal, "missing metadata")
-		}
-
-		// Get organization ID from metadata
-		orgIDs := md.Get(cn.OrganizationIDHeader)
-		if len(orgIDs) == 0 {
-			l.Errorf("Missing org header (code %s)", cn.ErrMissingOrgIDHeader.Error())
-			return status.Error(codes.InvalidArgument, cn.ErrMissingOrgIDHeader.Error())
-		}
-
-		orgID := orgIDs[0]
-
-		// Validate the organization ID
-		res, err := c.validateOrganizationID(ctx, orgID)
-		if err != nil {
-			if err == cn.ErrUnknownOrgIDHeader {
-				l.Errorf("Unknown org ID %s", orgID)
-				return status.Error(codes.InvalidArgument, cn.ErrUnknownOrgIDHeader.Error())
-			}
-
-			l.Errorf("Validation failed for org %s: %v", orgID, err)
-
-			return status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
-		}
-
-		// Check if the license is valid
-		if !res.Valid && !res.ActiveGracePeriod {
-			l.Errorf("Org %s license invalid", orgID)
-
-			return status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
+		// Validate organization ID from gRPC metadata
+		if err := c.validateGRPCOrganizationID(ss.Context()); err != nil {
+			return err
 		}
 
 		// Continue with the stream handling
@@ -100,27 +66,24 @@ func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-// processGRPCMultiOrgRequest handles gRPC requests in multi-org mode
-func (c *LicenseClient) processGRPCMultiOrgRequest(
-	ctx context.Context,
-	req any,
-	_ *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (any, error) {
+// validateGRPCOrganizationID extracts and validates the organization ID from gRPC metadata
+// Returns an error if validation fails
+// This is a helper function to avoid code duplication between unary and stream interceptors
+func (c *LicenseClient) validateGRPCOrganizationID(ctx context.Context) error {
 	l := c.validator.GetLogger()
 
 	// Extract organization ID from metadata
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		l.Error("Failed to extract metadata from gRPC context")
-		return nil, status.Error(codes.Internal, "missing metadata")
+		return status.Error(codes.Internal, "missing metadata")
 	}
 
 	// Get organization ID from metadata
 	orgIDs := md.Get(cn.OrganizationIDHeader)
 	if len(orgIDs) == 0 {
 		l.Errorf("Missing org header (code %s)", cn.ErrMissingOrgIDHeader.Error())
-		return nil, status.Error(codes.InvalidArgument, cn.ErrMissingOrgIDHeader.Error())
+		return status.Error(codes.InvalidArgument, cn.ErrMissingOrgIDHeader.Error())
 	}
 
 	orgID := orgIDs[0]
@@ -130,19 +93,35 @@ func (c *LicenseClient) processGRPCMultiOrgRequest(
 	if err != nil {
 		if err == cn.ErrUnknownOrgIDHeader {
 			l.Errorf("Unknown org ID %s", orgID)
-			return nil, status.Error(codes.InvalidArgument, cn.ErrUnknownOrgIDHeader.Error())
+
+			return status.Error(codes.InvalidArgument, cn.ErrUnknownOrgIDHeader.Error())
 		}
 
 		l.Errorf("Validation failed for org %s: %v", orgID, err)
 
-		return nil, status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
+		return status.Error(codes.PermissionDenied, pkg.ValidateBusinessError(err, "", orgID).Error())
 	}
 
 	// Check if the license is valid
 	if !res.Valid && !res.ActiveGracePeriod {
 		l.Errorf("Org %s license invalid", orgID)
 
-		return nil, status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
+		return status.Error(codes.PermissionDenied, cn.ErrOrgLicenseInvalid.Error())
+	}
+
+	return nil
+}
+
+// processGRPCMultiOrgRequest handles gRPC requests in multi-org mode
+func (c *LicenseClient) processGRPCMultiOrgRequest(
+	ctx context.Context,
+	req any,
+	_ *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
+	// Validate organization ID from gRPC metadata
+	if err := c.validateGRPCOrganizationID(ctx); err != nil {
+		return nil, err
 	}
 
 	// Continue with the request handling
