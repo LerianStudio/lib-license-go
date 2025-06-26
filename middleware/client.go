@@ -37,13 +37,16 @@ func (c *LicenseClient) ValidateInitialization(operation string) {
 }
 
 // validateClientInitialization checks if the client is correctly initialized.
-// Unlike ValidateInitialization, this returns an error instead of panicking.
-// This is used by methods that should return errors rather than panic.
+// It returns an error for validator-related issues but panics if the client itself is nil.
+// This provides a balance between fail-fast for critical configuration errors
+// and graceful error handling for runtime issues.
 func (c *LicenseClient) validateClientInitialization(operation string) error {
+	// Critical error: nil client should always panic
 	if c == nil {
-		return fmt.Errorf("LicenseClient is nil, cannot %s", operation)
+		panic(fmt.Sprintf("LicenseClient is nil, cannot %s. Review your configuration.", operation))
 	}
 
+	// Non-critical error: nil validator returns an error
 	if c.validator == nil {
 		return fmt.Errorf("LicenseClient.validator is nil, cannot %s", operation)
 	}
@@ -154,11 +157,10 @@ func (c *LicenseClient) GetLicenseManagerShutdown() *shutdown.LicenseManagerShut
 	return nil
 }
 
-// StartupValidation performs license validation at application startup and initializes background refresh.
-// This method must be called once during application initialization before using any middleware or interceptors.
+// startupValidation performs license validation at application startup and initializes background refresh.
 // It is safe to call multiple times as it uses sync.Once internally to ensure validation happens only once.
 // Panics if the client is nil or misconfigured to prevent running without license validation.
-func (c *LicenseClient) StartupValidation() {
+func (c *LicenseClient) startupValidation() {
 	// Validate client initialization before entering the once block
 	// This prevents silently skipping validation on misconfigured clients
 	c.ValidateInitialization("perform startup validation")
