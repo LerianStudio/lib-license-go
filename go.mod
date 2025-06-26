@@ -5,12 +5,12 @@ go 1.23.2
 toolchain go1.24.1
 
 require (
-	github.com/LerianStudio/lib-commons v1.14.0
+	github.com/LerianStudio/lib-commons v1.16.0
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
-	google.golang.org/grpc v1.72.2
+	google.golang.org/grpc v1.73.0
 )
 
 require (
@@ -58,9 +58,9 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
