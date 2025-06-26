@@ -17,6 +17,9 @@ func (c *LicenseClient) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	// Validate client initialization
 	c.ValidateInitialization("create unary interceptor")
 
+	// Perform startup validation
+	c.startupValidation()
+
 	// Return the interceptor function
 	return func(
 		ctx context.Context,
@@ -40,6 +43,9 @@ func (c *LicenseClient) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 func (c *LicenseClient) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	// Validate client initialization
 	c.ValidateInitialization("create stream interceptor")
+
+	// Perform startup validation
+	c.startupValidation()
 
 	// Return the interceptor function
 	return func(

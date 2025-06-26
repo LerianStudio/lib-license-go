@@ -12,6 +12,9 @@ func (c *LicenseClient) Middleware() fiber.Handler {
 	// Validate client initialization
 	c.ValidateInitialization("create middleware")
 
+	// Perform startup validation
+	c.startupValidation()
+
 	// Return request handler
 	return func(ctx *fiber.Ctx) error {
 		// Validate client initialization for each request
