@@ -342,13 +342,28 @@ The SDK is organized into separate files for better maintainability:
 ## 🚨 Error Handling
 
 ### HTTP Errors
-- `400 Bad Request` - Missing or invalid organization ID
-- `403 Forbidden` - Invalid or expired license
+- `400 Bad Request`
+  - `LCS-0010` - Missing organization ID header
+  - `LCS-0011` - Unknown organization ID
+  - `LCS-0002` - No organization IDs configured
+- `403 Forbidden`
+  - `LCS-0013` - Organization license is invalid or expired
+  - `LCS-0012` - Failed to validate organization license
+  - `LCS-0003` - No valid licenses found for any organization
+- `500 Internal Server Error`
+  - `LCS-0001` - Internal server error during license validation
 
 ### gRPC Errors  
-- `INVALID_ARGUMENT` - Missing or unknown organization ID
-- `PERMISSION_DENIED` - Invalid or expired license
-- `INTERNAL` - Server-side validation errors
+- `INVALID_ARGUMENT`
+  - `LCS-0010` - Missing organization ID header in metadata
+  - `LCS-0011` - Unknown organization ID
+- `PERMISSION_DENIED`
+  - `LCS-0013` - Organization license is invalid or expired
+  - `LCS-0012` - Failed to validate organization license
+  - `LCS-0003` - No valid licenses found for any organization
+- `INTERNAL`
+  - `LCS-0001` - Internal server error during license validation
+  - Missing metadata in gRPC context
 
 ## 📧 Contact
 
