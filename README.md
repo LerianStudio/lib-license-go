@@ -223,10 +223,11 @@ While startup and background validation happen once, per-request validation work
 ### 📡 HTTP Shutdown
 
 ```go
-"github.com/LerianStudio/lib-commons/commons"
-"github.com/LerianStudio/lib-commons/commons/log"
-"github.com/LerianStudio/lib-commons/commons/opentelemetry"
-libCommonsLicense"github.com/LerianStudio/lib-commons/commons/license"
+libCommons "github.com/LerianStudio/lib-commons/commons"
+libCommonsLog "github.com/LerianStudio/lib-commons/commons/log"
+libCommonsOtel "github.com/LerianStudio/lib-commons/commons/opentelemetry"
+libCommonsLicense "github.com/LerianStudio/lib-commons/commons/license"
+libCommonsServer "github.com/LerianStudio/lib-commons/commons/server"
 libLicense "github.com/LerianStudio/lib-license-go/middleware"
 "github.com/gofiber/fiber/v2"
 
@@ -234,15 +235,15 @@ type HTTPServer struct {
 	app             *fiber.App
 	serverAddress   string
 	license		    *libCommonsLicense.ManagerShutdown
-	logger          log.Logger
-	telemetry       opentelemetry.Telemetry
+	logger          libCommonsLog.Logger
+	telemetry       libCommonsOtel.Telemetry
 }
 
 func (s *HTTPServer) ServerAddress() string {
 	return s.serverAddress
 }
 
-func NewHTTPServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *HTTPServer {
+func NewHTTPServer(cfg *Config, app *fiber.App, logger libCommonsLog.Logger, telemetry *libCommonsOtel.Telemetry, licenseClient *libLicense.LicenseClient) *HTTPServer {
 	return &HTTPServer{
 		app:            app,
 		serverAddress:  cfg.ServerAddress,
@@ -252,9 +253,9 @@ func NewHTTPServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *op
 	}
 }
 
-func (s *HTTPServer) Run(l *commons.Launcher) error {
-	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
-        WithHTTPServer(s.app, s.address).
+func (s *HTTPServer) Run(l *libCommons.Launcher) error {
+	libCommonsServer.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithHTTPServer(s.app, s.serverAddress).
         StartWithGracefulShutdown()
 
     return nil
@@ -271,9 +272,9 @@ import (
 
 	libCommons "github.com/LerianStudio/lib-commons/commons"
 	libCommonsLicense "github.com/LerianStudio/lib-commons/commons/license"
-	libLog "github.com/LerianStudio/lib-commons/commons/log"
-	libOtel "github.com/LerianStudio/lib-commons/commons/opentelemetry"
-	"github.com/LerianStudio/lib-commons/commons/shutdown"
+	libCommonsLog "github.com/LerianStudio/lib-commons/commons/log"
+	libCommonsOtel "github.com/LerianStudio/lib-commons/commons/opentelemetry"
+	libCommonsServer "github.com/LerianStudio/lib-commons/commons/server"
 	libLicense "github.com/LerianStudio/lib-license-go/middleware"
 )
 
@@ -282,8 +283,8 @@ type GRPCServer struct {
 	grpcServer   *grpc.Server
 	protoAddress string
 	license      *libCommonsLicense.ManagerShutdown
-	logger       libLog.Logger
-	telemetry    libOtel.Telemetry
+	logger       libCommonsLog.Logger
+	telemetry    libCommonsOtel.Telemetry
 }
 
 // ProtoAddress returns is a convenience method to return the proto server address.
@@ -292,7 +293,7 @@ func (s *GRPCServer) ProtoAddress() string {
 }
 
 // NewGRPCServer creates an instance of gRPC Server.
-func NewGRPCServer(cfg *Config, grpcServer *grpc.Server, logger libLog.Logger, telemetry *libOtel.Telemetry, lc *libLicense.LicenseClient) *GRPCServer {
+func NewGRPCServer(cfg *Config, grpcServer *grpc.Server, logger libCommonsLog.Logger, telemetry *libCommonsOtel.Telemetry, lc *libLicense.LicenseClient) *GRPCServer {
 	return &GRPCServer{
 		grpcServer:   grpcServer,
 		protoAddress: cfg.ProtoAddress,
@@ -304,8 +305,8 @@ func NewGRPCServer(cfg *Config, grpcServer *grpc.Server, logger libLog.Logger, t
 
 // Run gRPC server.
 func (s *GRPCServer) Run(l *libCommons.Launcher) error {
-	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
-        WithGRPCServer(s.server, s.protoAddress).
+	libCommonsServer.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithGRPCServer(s.grpcServer, s.protoAddress).
         StartWithGracefulShutdown()
 
     return nil
