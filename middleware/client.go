@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sync"
 
+	libLicense "github.com/LerianStudio/lib-commons/commons/license"
 	"github.com/LerianStudio/lib-commons/commons/log"
-	"github.com/LerianStudio/lib-commons/commons/shutdown"
 	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/model"
 	"github.com/LerianStudio/lib-license-go/pkg"
@@ -149,7 +149,7 @@ func (c *LicenseClient) GetLogger() log.Logger {
 }
 
 // GetLicenseManagerShutdown returns the shutdown manager from the validation client
-func (c *LicenseClient) GetLicenseManagerShutdown() *shutdown.LicenseManagerShutdown {
+func (c *LicenseClient) GetLicenseManagerShutdown() *libLicense.ManagerShutdown {
 	if c != nil && c.validator != nil {
 		return c.validator.GetShutdownManager()
 	}

@@ -164,11 +164,13 @@ When your application runs both HTTP and gRPC servers, you can use the same `Lic
 func main() {
     logger := log.NewLogger()
     
+    const applicationName = "your-app-id"
+
     // Create ONE license client for both servers
     licenseClient := libLicense.NewLicenseClient(
-        "your-app-id",
-        "your-license-key",
-        "org1,org2", 
+        applicationName,
+        os.Getenv("LICENSE_KEY"),
+        os.Getenv("ORGANIZATION_IDS"), 
         &logger,
     )
 
@@ -218,49 +220,97 @@ While startup and background validation happen once, per-request validation work
 
 ## 🛡️ Graceful Shutdown Integration
 
+### 📡 HTTP Shutdown
+
 ```go
 "github.com/LerianStudio/lib-commons/commons"
 "github.com/LerianStudio/lib-commons/commons/log"
 "github.com/LerianStudio/lib-commons/commons/opentelemetry"
-"github.com/LerianStudio/lib-commons/commons/shutdown"
+libCommonsLicense"github.com/LerianStudio/lib-commons/commons/license"
 libLicense "github.com/LerianStudio/lib-license-go/middleware"
 "github.com/gofiber/fiber/v2"
 
-type Server struct {
-	app           *fiber.App
-	serverAddress string
-	license			  *shutdown.LicenseManagerShutdown
-	logger        log.Logger
-	telemetry     opentelemetry.Telemetry
+type HTTPServer struct {
+	app             *fiber.App
+	serverAddress   string
+	license		    *libCommonsLicense.ManagerShutdown
+	logger          log.Logger
+	telemetry       opentelemetry.Telemetry
 }
 
-func (s *Server) ServerAddress() string {
+func (s *HTTPServer) ServerAddress() string {
 	return s.serverAddress
 }
 
-func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *Server {
-	return &Server{
-		app:           app,
-		serverAddress: cfg.ServerAddress,
-		license: 			 licenseClient.GetLicenseManagerShutdown(),
-		logger:        logger,
-		telemetry:     *telemetry,
+func NewHTTPServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *HTTPServer {
+	return &HTTPServer{
+		app:            app,
+		serverAddress:  cfg.ServerAddress,
+		license:        licenseClient.GetLicenseManagerShutdown(),
+		logger:         logger,
+		telemetry:      *telemetry,
 	}
 }
 
-func (s *Server) Run(l *commons.Launcher) error {
-	shutdown.StartServerWithGracefulShutdown(
-		s.app,
-		s.license,
-		&s.telemetry,
-		s.ServerAddress(),
-		s.logger,
-	)
+func (s *HTTPServer) Run(l *commons.Launcher) error {
+	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithHTTPServer(s.app, s.address).
+        StartWithGracefulShutdown()
 
-	return nil
+    return nil
 }
 ```
+## 🔌 GRPC Shutdown
 
+```go
+import (
+	"net"
+
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	libCommons "github.com/LerianStudio/lib-commons/commons"
+	libCommonsLicense "github.com/LerianStudio/lib-commons/commons/license"
+	libLog "github.com/LerianStudio/lib-commons/commons/log"
+	libOtel "github.com/LerianStudio/lib-commons/commons/opentelemetry"
+	"github.com/LerianStudio/lib-commons/commons/shutdown"
+	libLicense "github.com/LerianStudio/lib-license-go/middleware"
+)
+
+// GRPCServer represents the gRPC server for Ledger service.
+type GRPCServer struct {
+	grpcServer   *grpc.Server
+	protoAddress string
+	license      *libCommonsLicense.ManagerShutdown
+	logger       libLog.Logger
+	telemetry    libOtel.Telemetry
+}
+
+// ProtoAddress returns is a convenience method to return the proto server address.
+func (s *GRPCServer) ProtoAddress() string {
+	return s.protoAddress
+}
+
+// NewGRPCServer creates an instance of gRPC Server.
+func NewGRPCServer(cfg *Config, grpcServer *grpc.Server, logger libLog.Logger, telemetry *libOtel.Telemetry, lc *libLicense.LicenseClient) *GRPCServer {
+	return &GRPCServer{
+		grpcServer:   grpcServer,
+		protoAddress: cfg.ProtoAddress,
+		license:      lc.GetLicenseManagerShutdown(),
+		logger:       logger,
+		telemetry:    *telemetry,
+	}
+}
+
+// Run gRPC server.
+func (s *GRPCServer) Run(l *libCommons.Launcher) error {
+	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithGRPCServer(s.server, s.protoAddress).
+        StartWithGracefulShutdown()
+
+    return nil
+}
+```
 ## 🔧 Advanced Configuration
 
 ### Custom Termination Handler
