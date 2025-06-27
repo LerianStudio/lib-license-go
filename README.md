@@ -18,7 +18,6 @@ A lightweight Go SDK with HTTP middleware and gRPC interceptors to validate plug
 Set the required environment variables in your `.env` file or environment configuration:
 
 ```dotenv
-APPLICATION_NAME=your-application-name
 LICENSE_KEY=your-plugin-license-key
 ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
@@ -31,10 +30,11 @@ Create a license client instance in your application setup:
 import libLicense "github.com/LerianStudio/lib-license-go/middleware"
 
 type Config struct {
-    ApplicationName string `env:"APPLICATION_NAME"`
     LicenseKey      string `env:"LICENSE_KEY"`
     OrganizationIDs string `env:"ORGANIZATION_IDS"`
 }
+
+const applicationName = "your-aplication-name"
 
 func InitServices() *Service {
     cfg := &Config{}
@@ -42,7 +42,7 @@ func InitServices() *Service {
     logger := zap.InitializeLogger()
     
     licenseClient := libLicense.NewLicenseClient(
-        cfg.ApplicationName,
+        applicationName,
         cfg.LicenseKey,
         cfg.OrganizationIDs,
         &logger,

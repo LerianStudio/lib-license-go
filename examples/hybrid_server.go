@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 
 	commonLog "github.com/LerianStudio/lib-commons/commons/log"
 	libLicense "github.com/LerianStudio/lib-license-go/middleware"
@@ -18,12 +19,14 @@ func main() {
 	// For this example, we'll use a nil logger - replace with your actual logger
 	var logger *commonLog.Logger
 
+	const applicationName = "your-app-id"
+
 	// Create a single license client instance
 	// This will be shared between HTTP and gRPC servers
 	licenseClient := libLicense.NewLicenseClient(
-		"your-app-id",
-		"your-license-key",
-		"org1,org2",
+		applicationName,
+		os.Getenv("LICENSE_KEY"),
+		os.Getenv("ORGANIZATION_IDS"),
 		logger,
 	)
 

@@ -1,44 +1,9 @@
 package pkg
 
 import (
-	"errors"
 	"slices"
 	"strings"
-
-	"github.com/LerianStudio/lib-commons/commons"
-	"github.com/LerianStudio/lib-commons/commons/log"
-	"github.com/LerianStudio/lib-license-go/model"
 )
-
-// ValidateEnvVariables validates the required environment variables
-func ValidateEnvVariables(cfg *model.Config, l log.Logger) error {
-	if cfg == nil {
-		return errors.New("license client config is nil")
-	}
-
-	if commons.IsNilOrEmpty(&cfg.ApplicationName) {
-		err := "missing application name environment variable"
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	if commons.IsNilOrEmpty(&cfg.LicenseKey) {
-		err := "missing license key environment variable"
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	if commons.IsNilOrEmpty(&cfg.OrganizationIDs) {
-		err := "missing organization IDs environment variable"
-		l.Error(err)
-
-		return errors.New(err)
-	}
-
-	return nil
-}
 
 // ParseOrganizationIDs splits the comma-separated organization IDs string into a slice
 func ParseOrganizationIDs(orgIDsStr string) []string {
