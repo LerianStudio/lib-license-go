@@ -18,7 +18,6 @@ A lightweight Go SDK with HTTP middleware and gRPC interceptors to validate plug
 Set the required environment variables in your `.env` file or environment configuration:
 
 ```dotenv
-APPLICATION_NAME=your-application-name
 LICENSE_KEY=your-plugin-license-key
 ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
@@ -31,10 +30,11 @@ Create a license client instance in your application setup:
 import libLicense "github.com/LerianStudio/lib-license-go/middleware"
 
 type Config struct {
-    ApplicationName string `env:"APPLICATION_NAME"`
     LicenseKey      string `env:"LICENSE_KEY"`
     OrganizationIDs string `env:"ORGANIZATION_IDS"`
 }
+
+const applicationName = "your-aplication-name"
 
 func InitServices() *Service {
     cfg := &Config{}
@@ -42,7 +42,7 @@ func InitServices() *Service {
     logger := zap.InitializeLogger()
     
     licenseClient := libLicense.NewLicenseClient(
-        cfg.ApplicationName,
+        applicationName,
         cfg.LicenseKey,
         cfg.OrganizationIDs,
         &logger,
@@ -164,11 +164,13 @@ When your application runs both HTTP and gRPC servers, you can use the same `Lic
 func main() {
     logger := log.NewLogger()
     
+    const applicationName = "your-app-id"
+
     // Create ONE license client for both servers
     licenseClient := libLicense.NewLicenseClient(
-        "your-app-id",
-        "your-license-key",
-        "org1,org2", 
+        applicationName,
+        os.Getenv("LICENSE_KEY"),
+        os.Getenv("ORGANIZATION_IDS"), 
         &logger,
     )
 
@@ -218,49 +220,97 @@ While startup and background validation happen once, per-request validation work
 
 ## 🛡️ Graceful Shutdown Integration
 
+### 📡 HTTP Shutdown
+
 ```go
 "github.com/LerianStudio/lib-commons/commons"
 "github.com/LerianStudio/lib-commons/commons/log"
 "github.com/LerianStudio/lib-commons/commons/opentelemetry"
-"github.com/LerianStudio/lib-commons/commons/shutdown"
+libCommonsLicense"github.com/LerianStudio/lib-commons/commons/license"
 libLicense "github.com/LerianStudio/lib-license-go/middleware"
 "github.com/gofiber/fiber/v2"
 
-type Server struct {
-	app           *fiber.App
-	serverAddress string
-	license			  *shutdown.LicenseManagerShutdown
-	logger        log.Logger
-	telemetry     opentelemetry.Telemetry
+type HTTPServer struct {
+	app             *fiber.App
+	serverAddress   string
+	license		    *libCommonsLicense.ManagerShutdown
+	logger          log.Logger
+	telemetry       opentelemetry.Telemetry
 }
 
-func (s *Server) ServerAddress() string {
+func (s *HTTPServer) ServerAddress() string {
 	return s.serverAddress
 }
 
-func NewServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *Server {
-	return &Server{
-		app:           app,
-		serverAddress: cfg.ServerAddress,
-		license: 			 licenseClient.GetLicenseManagerShutdown(),
-		logger:        logger,
-		telemetry:     *telemetry,
+func NewHTTPServer(cfg *Config, app *fiber.App, logger log.Logger, telemetry *opentelemetry.Telemetry, licenseClient *libLicense.LicenseClient) *HTTPServer {
+	return &HTTPServer{
+		app:            app,
+		serverAddress:  cfg.ServerAddress,
+		license:        licenseClient.GetLicenseManagerShutdown(),
+		logger:         logger,
+		telemetry:      *telemetry,
 	}
 }
 
-func (s *Server) Run(l *commons.Launcher) error {
-	shutdown.StartServerWithGracefulShutdown(
-		s.app,
-		s.license,
-		&s.telemetry,
-		s.ServerAddress(),
-		s.logger,
-	)
+func (s *HTTPServer) Run(l *commons.Launcher) error {
+	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithHTTPServer(s.app, s.address).
+        StartWithGracefulShutdown()
 
-	return nil
+    return nil
 }
 ```
+## 🔌 GRPC Shutdown
 
+```go
+import (
+	"net"
+
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	libCommons "github.com/LerianStudio/lib-commons/commons"
+	libCommonsLicense "github.com/LerianStudio/lib-commons/commons/license"
+	libLog "github.com/LerianStudio/lib-commons/commons/log"
+	libOtel "github.com/LerianStudio/lib-commons/commons/opentelemetry"
+	"github.com/LerianStudio/lib-commons/commons/shutdown"
+	libLicense "github.com/LerianStudio/lib-license-go/middleware"
+)
+
+// GRPCServer represents the gRPC server for Ledger service.
+type GRPCServer struct {
+	grpcServer   *grpc.Server
+	protoAddress string
+	license      *libCommonsLicense.ManagerShutdown
+	logger       libLog.Logger
+	telemetry    libOtel.Telemetry
+}
+
+// ProtoAddress returns is a convenience method to return the proto server address.
+func (s *GRPCServer) ProtoAddress() string {
+	return s.protoAddress
+}
+
+// NewGRPCServer creates an instance of gRPC Server.
+func NewGRPCServer(cfg *Config, grpcServer *grpc.Server, logger libLog.Logger, telemetry *libOtel.Telemetry, lc *libLicense.LicenseClient) *GRPCServer {
+	return &GRPCServer{
+		grpcServer:   grpcServer,
+		protoAddress: cfg.ProtoAddress,
+		license:      lc.GetLicenseManagerShutdown(),
+		logger:       logger,
+		telemetry:    *telemetry,
+	}
+}
+
+// Run gRPC server.
+func (s *GRPCServer) Run(l *libCommons.Launcher) error {
+	shutdown.NewServerManager(s.license, &s.telemetry, s.logger).
+        WithGRPCServer(s.server, s.protoAddress).
+        StartWithGracefulShutdown()
+
+    return nil
+}
+```
 ## 🔧 Advanced Configuration
 
 ### Custom Termination Handler
@@ -292,13 +342,28 @@ The SDK is organized into separate files for better maintainability:
 ## 🚨 Error Handling
 
 ### HTTP Errors
-- `400 Bad Request` - Missing or invalid organization ID
-- `403 Forbidden` - Invalid or expired license
+- `400 Bad Request`
+  - `LCS-0010` - Missing organization ID header
+  - `LCS-0011` - Unknown organization ID
+  - `LCS-0002` - No organization IDs configured
+- `403 Forbidden`
+  - `LCS-0013` - Organization license is invalid or expired
+  - `LCS-0012` - Failed to validate organization license
+  - `LCS-0003` - No valid licenses found for any organization
+- `500 Internal Server Error`
+  - `LCS-0001` - Internal server error during license validation
 
 ### gRPC Errors  
-- `INVALID_ARGUMENT` - Missing or unknown organization ID
-- `PERMISSION_DENIED` - Invalid or expired license
-- `INTERNAL` - Server-side validation errors
+- `INVALID_ARGUMENT`
+  - `LCS-0010` - Missing organization ID header in metadata
+  - `LCS-0011` - Unknown organization ID
+- `PERMISSION_DENIED`
+  - `LCS-0013` - Organization license is invalid or expired
+  - `LCS-0012` - Failed to validate organization license
+  - `LCS-0003` - No valid licenses found for any organization
+- `INTERNAL`
+  - `LCS-0001` - Internal server error during license validation
+  - Missing metadata in gRPC context
 
 ## 📧 Contact
 

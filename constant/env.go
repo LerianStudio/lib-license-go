@@ -8,9 +8,6 @@ const (
 	// Organization IDs environment variable (comma-separated list)
 	EnvOrganizationIDs = "ORGANIZATION_IDS"
 
-	// Application name environment variable
-	EnvApplicationName = "APPLICATION_NAME"
-
 	// License key environment variable
 	EnvLicenseKey = "LICENSE_KEY"
 )

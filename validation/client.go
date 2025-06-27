@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	libLicense "github.com/LerianStudio/lib-commons/commons/license"
 	"github.com/LerianStudio/lib-commons/commons/log"
-	"github.com/LerianStudio/lib-commons/commons/shutdown"
 	"github.com/LerianStudio/lib-commons/commons/zap"
 	cn "github.com/LerianStudio/lib-license-go/constant"
 	"github.com/LerianStudio/lib-license-go/internal/api"
@@ -27,7 +27,7 @@ type Client struct {
 	apiClient       *api.Client
 	cacheManager    *cache.Manager
 	refreshManager  *refresh.Manager
-	shutdownManager *shutdown.LicenseManagerShutdown
+	shutdownManager *libLicense.ManagerShutdown
 	logger          log.Logger
 	// IsGlobal indicates if this client is running in global-plugin mode
 	IsGlobal bool
@@ -78,7 +78,7 @@ func New(appID, licenseKey, orgIDs string, logger *log.Logger) (*Client, error) 
 	apiClient := api.New(cfg, httpClient, l)
 
 	// Create shutdown manager
-	shutdownManager := shutdown.New()
+	shutdownManager := libLicense.New()
 
 	// Create client
 	client := &Client{
@@ -453,11 +453,11 @@ func (c *Client) SetHTTPClient(client *http.Client) {
 }
 
 // GetShutdownManager returns the license shutdown manager
-func (c *Client) GetShutdownManager() *shutdown.LicenseManagerShutdown {
+func (c *Client) GetShutdownManager() *libLicense.ManagerShutdown {
 	return c.shutdownManager
 }
 
 // SetTerminationHandler allows customizing how the application terminates when license validation fails
-func (c *Client) SetTerminationHandler(handler shutdown.Handler) {
+func (c *Client) SetTerminationHandler(handler libLicense.Handler) {
 	c.shutdownManager.SetHandler(handler)
 }
