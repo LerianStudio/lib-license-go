@@ -22,7 +22,9 @@ LICENSE_KEY=your-plugin-license-key
 ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
 
-### 2.1 Initialize the License Client
+### 2. Setup Application License Client
+
+#### 2.1 Initialize the Application Name Constant
 
 Create an ApplicationName constant in your `pkg/constant/app.go` file:
 
@@ -32,7 +34,7 @@ package constant
 const ApplicationName = "your-application-name"
 ```
 
-### 2.2 Initialize the License Client
+#### 2.2 Initialize the License Client
 
 Create a license client instance in your application `internal/bootstrap/config.go` file:
 
