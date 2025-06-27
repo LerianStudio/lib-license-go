@@ -22,19 +22,30 @@ LICENSE_KEY=your-plugin-license-key
 ORGANIZATION_IDS=your-organization-id1,your-organization-id2
 ```
 
-### 2. Initialize the License Client
+### 2.1 Initialize the License Client
 
-Create a license client instance in your application setup:
+Create an ApplicationName constant in your `pkg/constant/app.go` file:
 
 ```go
-import libLicense "github.com/LerianStudio/lib-license-go/middleware"
+package constant
+
+const ApplicationName = "your-application-name"
+```
+
+### 2.2 Initialize the License Client
+
+Create a license client instance in your application `internal/bootstrap/config.go` file:
+
+```go
+import (
+    "github.com/LerianStudio/lib-license-go/middleware"
+    "github.com/LerianStudio/lib-license-go/pkg/constant"
+)
 
 type Config struct {
     LicenseKey      string `env:"LICENSE_KEY"`
     OrganizationIDs string `env:"ORGANIZATION_IDS"`
 }
-
-const applicationName = "your-aplication-name"
 
 func InitServices() *Service {
     cfg := &Config{}
@@ -42,15 +53,19 @@ func InitServices() *Service {
     logger := zap.InitializeLogger()
     
     licenseClient := libLicense.NewLicenseClient(
-        applicationName,
+        constant.ApplicationName,
         cfg.LicenseKey,
         cfg.OrganizationIDs,
         &logger,
     )
 
-    // Use with HTTP or gRPC services
-    httpApp := httpIn.NewRoutes(logger, licenseClient)
-    grpcServer := grpcIn.NewServer(logger, licenseClient)
+    // Use with HTTP routers and server
+	httpApp := in.NewRoutes(logger, telemetry, exampleHandler, licenseClient)
+	serverAPI := NewHTTPServer(cfg, httpApp, logger, telemetry, licenseClient)
+
+    // Use with gRPC routers and server
+	grpcApp := grcpcin.NewRouterGRPC(logger, telemetry, exampleQuery, exampleCommand, licenseClient)
+	serverGRPC := NewGRPCServer(cfg, grpcApp, logger, telemetry, licenseClient)
 
     return &Service{
         httpApp,
@@ -79,14 +94,6 @@ func NewRoutes(license *libLicense.LicenseClient) *fiber.App {
     
     return f
 }
-```
-
-### Multi-Organization Header
-
-For multi-organization mode, ensure your HTTP requests include the organization ID header:
-
-```bash
-curl -H "X-Organization-ID: your-org-id" http://localhost:8080/v1/applications
 ```
 
 ## 🔌 gRPC Interceptor Usage
@@ -129,7 +136,15 @@ func NewGRPCServerWithStreaming(license *libLicense.LicenseClient) *grpc.Server 
 }
 ```
 
-### Multi-Organization Metadata
+### HTTP Multi-Organization Header
+
+For multi-organization mode, ensure your HTTP requests include the organization ID header:
+
+```bash
+curl -H "X-Organization-ID: your-org-id" http://localhost:8080/v1/applications
+```
+
+### gRPC Multi-Organization Metadata
 
 For multi-organization mode, gRPC clients must include the organization ID in metadata:
 
@@ -153,70 +168,6 @@ func callGRPCService(client pb.YourServiceClient, orgID string) {
     }
 }
 ```
-
-## 🔄 Hybrid HTTP + gRPC Usage
-
-When your application runs both HTTP and gRPC servers, you can use the same `LicenseClient` instance for both. The SDK ensures that startup validation and background refresh happen only **once**, regardless of how many servers use the client.
-
-### Single Client, Multiple Servers
-
-```go
-func main() {
-    logger := log.NewLogger()
-    
-    const applicationName = "your-app-id"
-
-    // Create ONE license client for both servers
-    licenseClient := libLicense.NewLicenseClient(
-        applicationName,
-        os.Getenv("LICENSE_KEY"),
-        os.Getenv("ORGANIZATION_IDS"), 
-        &logger,
-    )
-
-    // Start both servers with the same client
-    go startHTTPServer(licenseClient)  // First call triggers validation
-    go startGRPCServer(licenseClient)  // Second call skips validation (sync.Once)
-    
-    select {} // Keep main alive
-}
-
-func startHTTPServer(client *libLicense.LicenseClient) {
-    app := fiber.New()
-    app.Use(client.Middleware()) // Triggers startup validation ONCE
-    
-    app.Get("/api/users", userHandler)
-    app.Listen(":8080")
-}
-
-func startGRPCServer(client *libLicense.LicenseClient) {
-    server := grpc.NewServer(
-        grpc.UnaryInterceptor(client.UnaryServerInterceptor()),   // Skips validation
-        grpc.StreamInterceptor(client.StreamServerInterceptor()), // Skips validation
-    )
-    
-    pb.RegisterYourServiceServer(server, &serviceImpl{})
-    
-    lis, _ := net.Listen("tcp", ":9090")
-    server.Serve(lis)
-}
-```
-
-### Benefits of Single Client
-
-- ✅ **Single startup validation** - No duplicate license checks
-- ✅ **One background refresh** - Shared cache and refresh cycle  
-- ✅ **Consistent state** - Both servers see the same license status
-- ✅ **Resource efficiency** - Reduced memory and network usage
-- ✅ **Synchronized shutdown** - Single point for cleanup
-
-### Per-Request Validation
-
-While startup and background validation happen once, per-request validation works independently for each protocol:
-
-- **HTTP requests** validate organization ID from `X-Organization-ID` header
-- **gRPC requests** validate organization ID from metadata
-- Each request is validated separately (no shared state per request)
 
 ## 🛡️ Graceful Shutdown Integration
 
@@ -312,6 +263,7 @@ func (s *GRPCServer) Run(l *libCommons.Launcher) error {
     return nil
 }
 ```
+
 ## 🔧 Advanced Configuration
 
 ### Custom Termination Handler
@@ -339,6 +291,22 @@ The SDK is organized into separate files for better maintainability:
 - `http.go` - HTTP Fiber middleware implementation  
 - `grpc.go` - gRPC unary and streaming interceptors
 - `middleware.go` - Package documentation and overview
+
+### Benefits of Single Client
+
+- ✅ **Single startup validation** - No duplicate license checks
+- ✅ **One background refresh** - Shared cache and refresh cycle  
+- ✅ **Consistent state** - Both servers see the same license status
+- ✅ **Resource efficiency** - Reduced memory and network usage
+- ✅ **Synchronized shutdown** - Single point for cleanup
+
+### Per-Request Validation
+
+While startup and background validation happen once, per-request validation works independently for each protocol:
+
+- **HTTP requests** validate organization ID from `X-Organization-ID` header
+- **gRPC requests** validate organization ID from metadata
+- Each request is validated separately (no shared state per request)
 
 ## 🚨 Error Handling
 
